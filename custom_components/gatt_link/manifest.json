@@ -12,7 +12,7 @@
     }
   ],
   "codeowners": ["@infoyouth"],
-  "config_flow": false,
+  "config_flow": true,
   "dependencies": ["bluetooth_adapters"],
   "documentation": "https://github.com/infoyouth/gatt-link-ha",
   "integration_type": "device",

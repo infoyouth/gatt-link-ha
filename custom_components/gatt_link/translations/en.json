@@ -20,7 +20,8 @@
     },
     "abort": {
       "already_configured": "This device is already configured.",
-      "no_devices_found": "No supported BLE devices were found."
+      "no_devices_found": "No supported BLE devices were found.",
+      "invalid_device": "The selected device is no longer available."
     }
   },
   "options": {
@@ -35,6 +36,14 @@
     },
     "error": {
       "invalid_scan_interval": "Enter a valid polling interval."
+    },
+    "selector": {
+      "connection_mode": {
+        "options": {
+          "push": "Push notifications",
+          "poll_and_disconnect": "Poll and disconnect"
+        }
+      }
     }
   },
   "entity": {
