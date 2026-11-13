@@ -4,7 +4,7 @@ import json
 import tomllib
 from pathlib import Path
 
-from gatt_link.const import DOMAIN
+from custom_components.gatt_link.const import DOMAIN
 
 PROJECT_ROOT = Path(__file__).parents[1]
 

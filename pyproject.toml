@@ -8,12 +8,14 @@ dependencies = ["gatt-link-ble==0.3.1"]
 
 [dependency-groups]
 dev = [
+    "aiousbwatcher==1.1.2",
     "homeassistant>=2026.3.0",
     "mypy>=1.11.0",
     "pytest>=8.3.0",
     "pytest-homeassistant-custom-component>=0.13.0",
     "python-semantic-release==10.7.0",
     "ruff>=0.6.0",
+    "serialx==1.11.0",
 ]
 
 [tool.uv]
@@ -23,12 +25,12 @@ package = false
 python_version = "3.14"
 strict = true
 warn_return_any = true
-mypy_path = "custom_components"
+mypy_path = "."
 files = ["custom_components", "tests"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-pythonpath = ["custom_components"]
+pythonpath = ["."]
 testpaths = ["tests"]
 addopts = ["--strict-config", "--strict-markers"]
 
