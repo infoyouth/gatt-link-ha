@@ -1,0 +1,6 @@
+line-length = 88
+target-version = "py314"
+src = ["custom_components", "tests"]
+
+[lint]
+select = ["ASYNC", "B", "C4", "E", "F", "I", "LOG", "PIE", "PT", "RUF", "SIM", "UP", "W"]
