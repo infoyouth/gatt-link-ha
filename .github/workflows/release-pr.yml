@@ -1,0 +1,80 @@
+name: Prepare release
+
+on:
+  workflow_run:
+    workflows: ["Tests"]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: prepare-release-main
+  cancel-in-progress: false
+
+jobs:
+  release-pr:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      !startsWith(github.event.workflow_run.head_commit.message, 'chore(release):')
+    name: Open version bump PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ secrets.RELEASE_PAT }}
+
+      - name: Confirm CI checked the current main commit
+        id: current-main
+        env:
+          CI_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          if [[ "$(git rev-parse HEAD)" == "$CI_SHA" ]]; then
+            echo "current=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "CI result is stale; main has advanced"
+            echo "current=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        if: steps.current-main.outputs.current == 'true'
+        with:
+          python-version: "3.14.2"
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+        if: steps.current-main.outputs.current == 'true'
+        with:
+          enable-cache: true
+
+      - name: Install locked dependencies
+        if: steps.current-main.outputs.current == 'true'
+        run: uv sync --locked --dev
+
+      - name: Prepare release version and changelog
+        if: steps.current-main.outputs.current == 'true'
+        run: uv run semantic-release version --no-commit --no-tag --no-push
+
+      - name: Read prepared version
+        if: steps.current-main.outputs.current == 'true'
+        id: version
+        run: |
+          version="$(uv run python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Create or update release PR
+        if: steps.current-main.outputs.current == 'true'
+        uses: peter-evans/create-pull-request@22a9089034f40e5a961c8808d113e2c98fb63676 # v7
+        with:
+          token: ${{ secrets.RELEASE_PAT }}
+          branch: release/version
+          delete-branch: true
+          title: "chore(release): ${{ steps.version.outputs.version }}"
+          commit-message: "chore(release): ${{ steps.version.outputs.version }}"
+          body: "Automated version and changelog update. Merge after CI succeeds to publish the GitHub release."
