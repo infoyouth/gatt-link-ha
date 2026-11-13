@@ -10,4 +10,5 @@ or a Bluetooth proxy.
 
 The integration uses push notifications by default. You can choose polling and
 disconnecting, with a configurable polling interval, in the integration's
-options.
+options. Depending on the device, it creates temperature, humidity, pressure,
+eCO2, TVOC, and battery sensors; only sensors supported by the device are added.
