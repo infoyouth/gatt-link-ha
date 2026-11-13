@@ -20,5 +20,5 @@
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/infoyouth/gatt-link-ha/issues",
   "requirements": ["gatt-link-ble==0.3.1"],
-  "version": "0.3.0"
+  "version": "0.4.0"
 }

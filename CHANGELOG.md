@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.4.0 (2026-11-13)
+
+### Features
+
+- Add redacted diagnostics ([#8](https://github.com/infoyouth/gatt-link-ha/pull/8),
+  [`c5af9a2`](https://github.com/infoyouth/gatt-link-ha/commit/c5af9a278aa1fa559c9f78a23a09c8120267ee96))
+
+
 ## v0.3.0 (2026-11-13)
 
 ### Features
