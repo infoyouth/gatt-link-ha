@@ -12,3 +12,5 @@ The integration uses push notifications by default. You can choose polling and
 disconnecting, with a configurable polling interval, in the integration's
 options. Depending on the device, it creates temperature, humidity, pressure,
 eCO2, TVOC, and battery sensors; only sensors supported by the device are added.
+Downloaded diagnostics include device metadata and sensor data, with Bluetooth
+addresses and config-entry unique IDs redacted.
