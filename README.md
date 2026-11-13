@@ -1,8 +1,13 @@
 # GATT Link
 
-Home Assistant integration for Nordic Thingy devices and supported Bluetooth SIG
-GATT sensors, using the standalone `gatt-link-ble` library for BLE transport and
-payload parsing.
+GATT Link integrates supported Nordic Thingy devices and Bluetooth SIG
+Environmental Sensing devices with Home Assistant over Bluetooth.
 
-This repository is being built in phases. See `ARCHITECTURE.md` for the
-implementation plan and supported behavior.
+Add the repository to HACS as a custom integration, install **GATT Link**, and
+restart Home Assistant. Nearby supported devices appear in **Settings >
+Devices & services** for setup. Bluetooth discovery works with a local adapter
+or a Bluetooth proxy.
+
+The integration uses push notifications by default. You can choose polling and
+disconnecting, with a configurable polling interval, in the integration's
+options.

@@ -11,8 +11,9 @@
       "service_uuid": "0000181a-0000-1000-8000-00805f9b34fb"
     }
   ],
+  "categories": ["sensors"],
   "codeowners": ["@infoyouth"],
-  "config_flow": false,
+  "config_flow": true,
   "dependencies": ["bluetooth_adapters"],
   "documentation": "https://github.com/infoyouth/gatt-link-ha",
   "integration_type": "device",
