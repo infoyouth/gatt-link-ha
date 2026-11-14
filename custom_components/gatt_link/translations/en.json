@@ -73,7 +73,39 @@
       },
       "battery": {
         "name": "Battery"
+      },
+      "illuminance": {
+        "name": "Illuminance (raw)"
       }
+    }
+  },
+  "exceptions": {
+    "invalid_address": {
+      "message": "The configured Bluetooth address is invalid."
+    },
+    "invalid_connection_mode": {
+      "message": "The configured connection mode is invalid."
+    },
+    "invalid_scan_interval": {
+      "message": "The configured polling interval is invalid."
+    },
+    "bluetooth_device_unavailable": {
+      "message": "The Bluetooth device is not currently available."
+    },
+    "read_failed": {
+      "message": "Unable to read data from the Bluetooth device."
+    },
+    "connection_failed": {
+      "message": "Unable to connect to the Bluetooth device."
+    },
+    "connection_lost": {
+      "message": "The Bluetooth connection was lost."
+    }
+  },
+  "issues": {
+    "proxy_slots_exhausted": {
+      "title": "Bluetooth proxy connection slots are exhausted",
+      "description": "The Bluetooth proxy could not connect because its connection slots may be in use. Change this device to Poll and disconnect in its options, or free a proxy connection slot."
     }
   }
 }

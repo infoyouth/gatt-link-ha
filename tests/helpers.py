@@ -57,6 +57,7 @@ class FakeGattLinkClient:
         self.disconnect_callback = disconnect_callback
         self.state = state
         self.start_error: GattLinkError | None = None
+        self.poll_error: GattLinkError | None = None
         self.start_calls = 0
         self.poll_calls = 0
         self.stop_calls = 0
@@ -72,6 +73,8 @@ class FakeGattLinkClient:
     async def poll(self) -> GattDeviceState:
         """Simulate one poll-and-disconnect cycle."""
         self.poll_calls += 1
+        if self.poll_error is not None:
+            raise self.poll_error
         return self.state
 
     async def stop(self) -> None:
@@ -97,6 +100,7 @@ class FakeGattLinkClientFactory:
         """Initialize the factory."""
         self.state = DEFAULT_STATE
         self.start_error: GattLinkError | None = None
+        self.poll_error: GattLinkError | None = None
         self.clients: list[FakeGattLinkClient] = []
 
     def __call__(
@@ -118,5 +122,6 @@ class FakeGattLinkClientFactory:
             state=self.state,
         )
         client.start_error = self.start_error
+        client.poll_error = self.poll_error
         self.clients.append(client)
         return client

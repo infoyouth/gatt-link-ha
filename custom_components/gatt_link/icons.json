@@ -1,0 +1,9 @@
+{
+  "entity": {
+    "sensor": {
+      "illuminance": {
+        "default": "mdi:brightness-5"
+      }
+    }
+  }
+}

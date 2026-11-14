@@ -7,9 +7,13 @@ from custom_components.gatt_link.const import (
     CONNECTION_MODE_POLL_AND_DISCONNECT,
     DOMAIN,
 )
+from custom_components.gatt_link.coordinator import GattLinkCoordinator
 from gatt_link_ble import ConnectionMode
 from gatt_link_ble.exceptions import GattConnectionError
+from homeassistant.components import bluetooth
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import ConfigEntryError
+from homeassistant.helpers.update_coordinator import UpdateFailed
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from tests.helpers import FakeGattLinkClientFactory
@@ -31,6 +35,44 @@ def _config_entry(
     )
     entry.add_to_hass(hass)
     return entry
+
+
+@pytest.mark.parametrize(
+    ("data", "options", "translation_key"),
+    [
+        ({}, {}, "invalid_address"),
+        (
+            {"address": "AA:BB:CC:DD:EE:FF"},
+            {CONF_CONNECTION_MODE: "invalid"},
+            "invalid_connection_mode",
+        ),
+        (
+            {"address": "AA:BB:CC:DD:EE:FF"},
+            {CONF_SCAN_INTERVAL: 0},
+            "invalid_scan_interval",
+        ),
+    ],
+)
+def test_coordinator_rejects_invalid_config(
+    hass: HomeAssistant,
+    data: dict[str, str],
+    options: dict[str, str | int],
+    translation_key: str,
+) -> None:
+    """Invalid stored config produces a translated setup error."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Thingy",
+        unique_id="aa:bb:cc:dd:ee:ff",
+        data=data,
+        options=options,
+    )
+
+    with pytest.raises(ConfigEntryError) as error:
+        GattLinkCoordinator(hass, entry)
+
+    assert error.value.translation_domain == DOMAIN
+    assert error.value.translation_key == translation_key
 
 
 @pytest.mark.asyncio
@@ -76,6 +118,72 @@ async def test_poll_mode_uses_configured_interval(
     assert len(mock_gatt_link_client.clients) == 2
     assert mock_gatt_link_client.clients[1].poll_calls == 1
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_poll_mode_marks_unavailable_when_device_is_missing(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Polling fails cleanly when Bluetooth no longer sees the device."""
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        lambda *_args, **_kwargs: None,
+    )
+    entry = _config_entry(
+        hass,
+        {
+            CONF_CONNECTION_MODE: CONNECTION_MODE_POLL_AND_DISCONNECT,
+            CONF_SCAN_INTERVAL: 37,
+        },
+    )
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_poll_mode_translates_ble_read_errors(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+) -> None:
+    """Polling turns BLE failures into translated coordinator errors."""
+    mock_gatt_link_client.poll_error = GattConnectionError("connection failed")
+    entry = _config_entry(
+        hass,
+        {
+            CONF_CONNECTION_MODE: CONNECTION_MODE_POLL_AND_DISCONNECT,
+            CONF_SCAN_INTERVAL: 37,
+        },
+    )
+
+    assert not await hass.config_entries.async_setup(entry.entry_id)
+
+
+def test_reconnect_provider_requires_a_previously_seen_ble_device(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A reconnect cannot proceed before a BLE device has been cached."""
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        lambda *_args, **_kwargs: None,
+    )
+    coordinator = GattLinkCoordinator(
+        hass,
+        MockConfigEntry(
+            domain=DOMAIN,
+            title="Thingy",
+            unique_id="aa:bb:cc:dd:ee:ff",
+            data={"address": "AA:BB:CC:DD:EE:FF"},
+        ),
+    )
+
+    with pytest.raises(UpdateFailed) as error:
+        coordinator._get_ble_device_for_reconnect()
+
+    assert error.value.translation_key == "bluetooth_device_unavailable"
 
 
 @pytest.mark.asyncio

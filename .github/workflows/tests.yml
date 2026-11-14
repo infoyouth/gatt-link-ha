@@ -28,4 +28,23 @@ jobs:
       - run: uv run --locked ruff format --check .
       - run: uv run --locked ruff check .
       - run: uv run --locked mypy custom_components tests
-      - run: uv run --locked pytest
+      - run: >-
+          uv run --locked pytest --cov=custom_components.gatt_link
+          --cov-report=term-missing
+          --cov-report=json:${{ runner.temp }}/coverage.json --cov-fail-under=95
+      - name: Require 95% coverage in every integration module
+        env:
+          COVERAGE_REPORT: ${{ runner.temp }}/coverage.json
+        run: |
+          uv run --locked python -c '
+          import json, os
+          with open(os.environ["COVERAGE_REPORT"], encoding="utf-8") as report_file:
+              report = json.load(report_file)
+          low_coverage = {
+              path: details["summary"]["percent_covered"]
+              for path, details in report["files"].items()
+              if details["summary"]["percent_covered"] <= 95
+          }
+          if low_coverage:
+              raise SystemExit(f"Integration modules must exceed 95% coverage: {low_coverage}")
+          '
