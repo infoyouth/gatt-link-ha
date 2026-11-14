@@ -1,3 +1,5 @@
 {
-  "name": "GATT Link"
+  "name": "GATT Link",
+  "homeassistant": "2026.11.0",
+  "render_readme": true
 }

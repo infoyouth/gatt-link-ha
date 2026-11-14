@@ -164,6 +164,27 @@ async def test_bluetooth_discovery_aborts_for_duplicate_device(
 
 
 @pytest.mark.asyncio
+async def test_bluetooth_discovery_aborts_for_unsupported_device(
+    hass: HomeAssistant,
+) -> None:
+    """Unsupported advertisements do not start a setup form."""
+    discovery_info = _service_info(
+        "AA:BB:CC:DD:EE:FF",
+        "Unsupported",
+        UNSUPPORTED_SERVICE_UUID,
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={"source": SOURCE_BLUETOOTH},
+        data=discovery_info,
+    )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "no_devices_found"
+
+
+@pytest.mark.asyncio
 async def test_manual_flow_aborts_without_supported_devices(
     hass: HomeAssistant,
     monkeypatch: pytest.MonkeyPatch,
@@ -240,6 +261,37 @@ async def test_reconfigure_replaces_device_and_unique_id(
     assert entry.title == "New Thingy"
     assert entry.unique_id == "aa:bb:cc:dd:ee:02"
     assert entry.data == {CONF_ADDRESS: replacement.address}
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_aborts_when_no_replacement_is_discovered(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reconfiguration requires another currently discovered device."""
+    original = _service_info(
+        "AA:BB:CC:DD:EE:01",
+        "Thingy",
+        THINGY_SERVICE_UUID,
+    )
+    await _create_device_entry(hass, original)
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    monkeypatch.setattr(
+        config_flow,
+        "async_discovered_service_info",
+        lambda _hass, *, connectable=True: [],
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": SOURCE_RECONFIGURE,
+            "entry_id": entry.entry_id,
+        },
+    )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "no_devices_found"
 
 
 @pytest.mark.asyncio

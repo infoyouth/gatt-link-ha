@@ -10,6 +10,7 @@ from gatt_link_ble.const import (
     HUMIDITY_CHAR_UUID,
     PRESSURE_CHAR_UUID,
     TEMPERATURE_CHAR_UUID,
+    THINGY_COLOR_CHAR_UUID,
     THINGY_GAS_CHAR_UUID,
     THINGY_HUMIDITY_CHAR_UUID,
     THINGY_PRESSURE_CHAR_UUID,
@@ -34,6 +35,8 @@ from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
 from .coordinator import GattLinkConfigEntry, GattLinkCoordinator
 from .entity import GattLinkEntity
+
+PARALLEL_UPDATES = 0
 
 type SensorValue = float | int | None
 type SensorValueFunction = Callable[[GattSensorData], SensorValue]
@@ -122,6 +125,17 @@ SENSORS: tuple[GattLinkSensorDescription, ...] = (
         ),
         characteristic_uuids=frozenset({BATTERY_LEVEL_CHAR_UUID}),
         value_fn=lambda sensors: sensors.battery,
+    ),
+    GattLinkSensorDescription(
+        entity=SensorEntityDescription(
+            key="illuminance",
+            translation_key="illuminance",
+            state_class=SensorStateClass.MEASUREMENT,
+            entity_category=EntityCategory.DIAGNOSTIC,
+            entity_registry_enabled_default=False,
+        ),
+        characteristic_uuids=frozenset({THINGY_COLOR_CHAR_UUID}),
+        value_fn=lambda sensors: sensors.illuminance,
     ),
 )
 
