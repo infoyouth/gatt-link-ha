@@ -93,6 +93,69 @@ class GattLinkConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=_device_schema(devices),
         )
 
+    async def async_step_reconfigure(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Allow replacing the configured Bluetooth device."""
+        entry = self._get_reconfigure_entry()
+        current_address = entry.data.get(CONF_ADDRESS)
+        devices = [
+            info
+            for info in _supported_devices(self.hass)
+            if not isinstance(current_address, str)
+            or format_mac(info.address) != format_mac(current_address)
+        ]
+        if not devices:
+            return self.async_abort(reason="no_devices_found")
+
+        if user_input is not None:
+            address = user_input[CONF_ADDRESS]
+            discovery_info = next(
+                (
+                    info
+                    for info in devices
+                    if format_mac(info.address) == format_mac(address)
+                ),
+                None,
+            )
+            if discovery_info is None:
+                return self.async_show_form(
+                    step_id="reconfigure",
+                    data_schema=_device_schema(devices),
+                    errors={"base": "invalid_device"},
+                    description_placeholders={"name": entry.title},
+                )
+
+            unique_id = format_mac(discovery_info.address)
+            configured_entry = (
+                self.hass.config_entries.async_entry_for_domain_unique_id(
+                    DOMAIN, unique_id
+                )
+            )
+            if (
+                configured_entry is not None
+                and configured_entry.entry_id != entry.entry_id
+            ):
+                return self.async_show_form(
+                    step_id="reconfigure",
+                    data_schema=_device_schema(devices),
+                    errors={"base": "already_configured"},
+                    description_placeholders={"name": entry.title},
+                )
+
+            return self.async_update_reload_and_abort(
+                entry,
+                unique_id=unique_id,
+                title=discovery_info.name or discovery_info.address,
+                data={CONF_ADDRESS: discovery_info.address},
+            )
+
+        return self.async_show_form(
+            step_id="reconfigure",
+            data_schema=_device_schema(devices),
+            description_placeholders={"name": entry.title},
+        )
+
     async def _async_prepare_device(
         self, discovery_info: BluetoothServiceInfoBleak
     ) -> ConfigFlowResult:

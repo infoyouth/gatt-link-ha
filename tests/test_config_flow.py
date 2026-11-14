@@ -16,7 +16,11 @@ from custom_components.gatt_link.const import (
     DOMAIN,
 )
 from home_assistant_bluetooth import BluetoothServiceInfoBleak
-from homeassistant.config_entries import SOURCE_BLUETOOTH, SOURCE_USER
+from homeassistant.config_entries import (
+    SOURCE_BLUETOOTH,
+    SOURCE_RECONFIGURE,
+    SOURCE_USER,
+)
 from homeassistant.core import HomeAssistant
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
@@ -190,6 +194,101 @@ async def test_manual_flow_aborts_without_supported_devices(
 
     assert result["type"] == "abort"
     assert result["reason"] == "no_devices_found"
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_replaces_device_and_unique_id(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reconfiguration updates the selected BLE device and entry identity."""
+    original = _service_info(
+        "AA:BB:CC:DD:EE:01",
+        "Old Thingy",
+        THINGY_SERVICE_UUID,
+    )
+    replacement = _service_info(
+        "AA:BB:CC:DD:EE:02",
+        "New Thingy",
+        THINGY_SERVICE_UUID,
+    )
+    await _create_device_entry(hass, original)
+    entry = hass.config_entries.async_entries(DOMAIN)[0]
+    monkeypatch.setattr(
+        config_flow,
+        "async_discovered_service_info",
+        lambda _hass, *, connectable=True: [original, replacement],
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": SOURCE_RECONFIGURE,
+            "entry_id": entry.entry_id,
+        },
+    )
+    assert result["type"] == "form"
+    assert result["step_id"] == "reconfigure"
+
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={CONF_ADDRESS: replacement.address},
+    )
+
+    assert result["type"] == "abort"
+    assert result["reason"] == "reconfigure_successful"
+    assert entry.title == "New Thingy"
+    assert entry.unique_id == "aa:bb:cc:dd:ee:02"
+    assert entry.data == {CONF_ADDRESS: replacement.address}
+
+
+@pytest.mark.asyncio
+async def test_reconfigure_rejects_already_configured_device(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reconfiguration cannot take over a device from another entry."""
+    original = _service_info(
+        "AA:BB:CC:DD:EE:01",
+        "Old Thingy",
+        THINGY_SERVICE_UUID,
+    )
+    replacement = _service_info(
+        "AA:BB:CC:DD:EE:02",
+        "New Thingy",
+        THINGY_SERVICE_UUID,
+    )
+    await _create_device_entry(hass, original)
+    await _create_device_entry(hass, replacement)
+    monkeypatch.setattr(
+        config_flow,
+        "async_discovered_service_info",
+        lambda _hass, *, connectable=True: [original, replacement],
+    )
+    entry = next(
+        entry
+        for entry in hass.config_entries.async_entries(DOMAIN)
+        if entry.data[CONF_ADDRESS] == original.address
+    )
+
+    result = await hass.config_entries.flow.async_init(
+        DOMAIN,
+        context={
+            "source": SOURCE_RECONFIGURE,
+            "entry_id": entry.entry_id,
+        },
+    )
+    assert result["type"] == "form", result
+    result = await hass.config_entries.flow.async_configure(
+        result["flow_id"],
+        user_input={CONF_ADDRESS: replacement.address},
+    )
+
+    assert result["type"] == "form"
+    assert result["step_id"] == "reconfigure"
+    assert result["errors"] == {"base": "already_configured"}
+    assert entry.unique_id == "aa:bb:cc:dd:ee:01"
+    assert entry.data == {CONF_ADDRESS: original.address}
 
 
 @pytest.mark.asyncio
