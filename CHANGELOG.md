@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.5.0 (2026-11-14)
+
+### Continuous Integration
+
+- Pin release runners to Ubuntu 24.04 ([#11](https://github.com/infoyouth/gatt-link-ha/pull/11),
+  [`211cd2b`](https://github.com/infoyouth/gatt-link-ha/commit/211cd2b33337c84f188f65258f99c7919340cf41))
+
+- Pin test runner to Ubuntu 24.04 ([#10](https://github.com/infoyouth/gatt-link-ha/pull/10),
+  [`b274215`](https://github.com/infoyouth/gatt-link-ha/commit/b27421590bdb45084a5bd89a7382d02e4ce01bd9))
+
+### Features
+
+- Add config entry reconfiguration ([#10](https://github.com/infoyouth/gatt-link-ha/pull/10),
+  [`b274215`](https://github.com/infoyouth/gatt-link-ha/commit/b27421590bdb45084a5bd89a7382d02e4ce01bd9))
+
+
 ## v0.4.0 (2026-11-13)
 
 ### Features
