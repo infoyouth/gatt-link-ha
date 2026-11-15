@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.0 (2026-11-15)
+
+### Features
+
+- Track polled data freshness ([#15](https://github.com/infoyouth/gatt-link-ha/pull/15),
+  [`dfc3c08`](https://github.com/infoyouth/gatt-link-ha/commit/dfc3c088e08786351ddd3a837ef6563dbb48cf19))
+
+
 ## v0.6.0 (2026-11-14)
 
 ### Features
