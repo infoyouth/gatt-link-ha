@@ -1,7 +1,8 @@
 """Coordinate GATT Link BLE updates with Home Assistant."""
 
 import logging
-from datetime import timedelta
+from collections.abc import Callable
+from datetime import datetime, timedelta
 from typing import override
 
 from bleak.backends.device import BLEDevice
@@ -17,10 +18,12 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers.device_registry import format_mac
+from homeassistant.helpers.event import async_track_time_interval
 from homeassistant.helpers.update_coordinator import (
-    DataUpdateCoordinator,
+    TimestampDataUpdateCoordinator,
     UpdateFailed,
 )
+from homeassistant.util import dt as dt_util
 
 from .const import (
     CONF_ADDRESS,
@@ -38,7 +41,7 @@ from .repairs import (
 _LOGGER = logging.getLogger(__name__)
 
 
-class GattLinkCoordinator(DataUpdateCoordinator[GattDeviceState]):
+class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
     """Fetch sensor state and manage the push connection lifecycle."""
 
     def __init__(
@@ -80,6 +83,7 @@ class GattLinkCoordinator(DataUpdateCoordinator[GattDeviceState]):
         self._last_ble_device: BLEDevice | None = None
         self._push_started = False
         self._unavailable_logged = False
+        self._unsub_freshness_check: Callable[[], None] | None = None
 
         update_interval = (
             timedelta(seconds=self._scan_interval)
@@ -92,8 +96,34 @@ class GattLinkCoordinator(DataUpdateCoordinator[GattDeviceState]):
             config_entry=config_entry,
             name=DOMAIN,
             update_interval=update_interval,
-            always_update=False,
+            always_update=(self.connection_mode is ConnectionMode.POLL_AND_DISCONNECT),
         )
+
+    def start_freshness_check(self) -> None:
+        """Track freshness after the first successful coordinator refresh."""
+        if self.connection_mode is ConnectionMode.POLL_AND_DISCONNECT:
+            self._unsub_freshness_check = async_track_time_interval(
+                self.hass,
+                self._async_check_data_freshness,
+                timedelta(seconds=self._scan_interval),
+            )
+
+    @property
+    def data_is_fresh(self) -> bool:
+        """Return whether the latest polled state is within its freshness window."""
+        if self.connection_mode is not ConnectionMode.POLL_AND_DISCONNECT:
+            return True
+        if self.last_update_success_time is None:
+            return False
+        return dt_util.utcnow() - self.last_update_success_time <= timedelta(
+            seconds=self._scan_interval * 2
+        )
+
+    @callback
+    def _async_check_data_freshness(self, _now: datetime) -> None:
+        """Refresh entity availability when polled data becomes stale."""
+        if not self.data_is_fresh:
+            self.async_update_listeners()
 
     @override
     async def _async_update_data(self) -> GattDeviceState:
@@ -217,6 +247,8 @@ class GattLinkCoordinator(DataUpdateCoordinator[GattDeviceState]):
     async def async_shutdown(self) -> None:
         """Stop the BLE client and coordinator refresh tasks."""
         try:
+            if self._unsub_freshness_check is not None:
+                self._unsub_freshness_check()
             if self._client is not None:
                 await self._client.stop()
         finally:

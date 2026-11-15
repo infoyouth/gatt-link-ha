@@ -1,5 +1,7 @@
 """Base entity for GATT Link devices."""
 
+from typing import override
+
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo, format_mac
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
@@ -14,6 +16,13 @@ class GattLinkEntity(CoordinatorEntity[GattLinkCoordinator]):
     _attr_has_entity_name = True
 
     @property
+    @override
+    def available(self) -> bool:
+        """Return false when polled data has exceeded its freshness window."""
+        return super().available and self.coordinator.data_is_fresh
+
+    @property
+    @override
     def device_info(self) -> DeviceInfo:
         """Return identifying information about the connected device."""
         state = self.coordinator.data
