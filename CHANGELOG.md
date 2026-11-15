@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.6.0 (2026-11-14)
+
+### Features
+
+- Complete applicable quality scale items ([#13](https://github.com/infoyouth/gatt-link-ha/pull/13),
+  [`5bab9cf`](https://github.com/infoyouth/gatt-link-ha/commit/5bab9cf031b28996247a92907dc8994fb54b38d7))
+
+
 ## v0.5.0 (2026-11-14)
 
 ### Continuous Integration
