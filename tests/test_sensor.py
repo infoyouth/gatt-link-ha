@@ -87,6 +87,12 @@ async def test_illuminance_sensor_is_disabled_by_default(
     assert registry_entry is not None
     assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
     assert hass.states.get(entity_id) is None
+
+    registry.async_update_entity(entity_id, disabled_by=None)
+    await hass.async_block_till_done()
+
+    assert len(mock_gatt_link_client.clients) == 2
+    assert hass.states.get(entity_id) is not None
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 

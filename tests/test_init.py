@@ -1,5 +1,7 @@
 """Tests for GATT Link config-entry setup and teardown."""
 
+from datetime import timedelta
+
 import pytest
 from custom_components.gatt_link.const import (
     CONF_CONNECTION_MODE,
@@ -11,9 +13,11 @@ from custom_components.gatt_link.coordinator import GattLinkCoordinator
 from gatt_link_ble import ConnectionMode
 from gatt_link_ble.exceptions import GattConnectionError
 from homeassistant.components import bluetooth
+from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError
 from homeassistant.helpers.update_coordinator import UpdateFailed
+from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from tests.helpers import FakeGattLinkClientFactory
@@ -117,6 +121,41 @@ async def test_poll_mode_uses_configured_interval(
 
     assert len(mock_gatt_link_client.clients) == 2
     assert mock_gatt_link_client.clients[1].poll_calls == 1
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_poll_mode_marks_data_unavailable_when_stale_then_recovers(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+) -> None:
+    """Polled entities become unavailable after two missed update intervals."""
+    interval = 37
+    entry = _config_entry(
+        hass,
+        {
+            CONF_CONNECTION_MODE: CONNECTION_MODE_POLL_AND_DISCONNECT,
+            CONF_SCAN_INTERVAL: interval,
+        },
+    )
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    coordinator = entry.runtime_data
+    entity_id = "sensor.thingy_temperature"
+    assert hass.states.get(entity_id) is not None
+
+    coordinator.last_update_success_time = dt_util.utcnow() - timedelta(
+        seconds=interval * 2 + 1
+    )
+    coordinator._async_check_data_freshness(dt_util.utcnow())
+    await hass.async_block_till_done()
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.state == STATE_UNAVAILABLE
+
+    await coordinator.async_refresh()
+    state = hass.states.get(entity_id)
+    assert state is not None
+    assert state.state == "20.0"
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
