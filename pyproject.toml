@@ -1,6 +1,6 @@
 [project]
 name = "gatt-link-ha"
-version = "0.7.0"
+version = "0.7.1"
 description = "Home Assistant integration for GATT Link BLE devices."
 requires-python = ">=3.14.2,<3.15"
 license = "MIT"
@@ -15,7 +15,7 @@ dev = [
     "pytest-homeassistant-custom-component>=0.13.0",
     "python-semantic-release==10.7.0",
     "ruff>=0.6.0",
-    "serialx==1.11.0",
+    "serialx==1.15.1",
 ]
 
 [tool.uv]
