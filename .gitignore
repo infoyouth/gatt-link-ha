@@ -1,4 +1,5 @@
 ARCHITECTURE.md
+NEW-SPEC.md
 .venv/
 __pycache__/
 .pytest_cache/
