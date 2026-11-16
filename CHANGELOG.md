@@ -2,6 +2,24 @@
 
 <!-- version list -->
 
+## v0.7.1 (2026-11-16)
+
+### Bug Fixes
+
+- **dependabot**: Cap Python support and pause HA updates
+  ([`cb2a5cc`](https://github.com/infoyouth/gatt-link-ha/commit/cb2a5cc0a9f5f2e3a1ccff1d7ae38d7da39ab492))
+
+### Continuous Integration
+
+- Automate non-major Dependabot updates
+  ([`b981751`](https://github.com/infoyouth/gatt-link-ha/commit/b9817513dcf9b56667ec8cd4ba7700d19a5c9e20))
+
+### Documentation
+
+- Review contributor documentation
+  ([`319dcbd`](https://github.com/infoyouth/gatt-link-ha/commit/319dcbd3bbc291720a4fad5845acd3a6083a6982))
+
+
 ## v0.7.0 (2026-11-15)
 
 ### Features
