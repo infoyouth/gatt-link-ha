@@ -5,6 +5,12 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    # Temporarily pause non-major Home Assistant releases until the test plugin supports them.
+    ignore:
+      - dependency-name: homeassistant
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
     groups:
       non-major:
         update-types:
