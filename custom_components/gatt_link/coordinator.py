@@ -301,6 +301,43 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             self.connection_mode.value,
             "found" if ble_device is not None else "not found",
         )
+        if ble_device is None:
+            scanner_devices = bluetooth.async_scanner_devices_by_address(
+                self.hass,
+                self.address,
+                connectable=False,
+            )
+            advertisement = bluetooth.async_last_service_info(
+                self.hass,
+                self.address,
+                connectable=False,
+            )
+            connectable_advertisement = bluetooth.async_last_service_info(
+                self.hass,
+                self.address,
+                connectable=True,
+            )
+            _LOGGER.debug(
+                "[BT-DIAG] HA scanner history for %s: advertisement=%s "
+                "(reported_connectable=%s), connectable_history=%s",
+                self.device_name,
+                "present" if advertisement is not None else "absent",
+                advertisement.connectable if advertisement is not None else None,
+                "present" if connectable_advertisement is not None else "absent",
+            )
+            _LOGGER.debug(
+                "[BT-DIAG] HA scanners seeing %s: %s",
+                self.device_name,
+                [
+                    (
+                        f"#{index}(scanner_connectable="
+                        f"{scanner_device.scanner.connectable}, "
+                        f"scanning={scanner_device.scanner.scanning}, "
+                        f"rssi={scanner_device.advertisement.rssi})"
+                    )
+                    for index, scanner_device in enumerate(scanner_devices, start=1)
+                ],
+            )
         return ble_device
 
     @callback

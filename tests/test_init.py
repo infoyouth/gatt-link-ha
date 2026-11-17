@@ -261,6 +261,27 @@ async def test_push_mode_logs_reachability_diagnostics_when_device_is_missing(
         diagnostics,
         raising=False,
     )
+    advertisement = SimpleNamespace(connectable=False)
+    last_service_info = Mock(
+        side_effect=lambda _hass, _address, *, connectable=True: (
+            advertisement if not connectable else None
+        )
+    )
+    monkeypatch.setattr(
+        bluetooth,
+        "async_last_service_info",
+        last_service_info,
+    )
+    scanner_device = SimpleNamespace(
+        scanner=SimpleNamespace(connectable=True, scanning=True),
+        advertisement=SimpleNamespace(rssi=-60),
+    )
+    scanner_devices = Mock(return_value=[scanner_device])
+    monkeypatch.setattr(
+        bluetooth,
+        "async_scanner_devices_by_address",
+        scanner_devices,
+    )
     coordinator = GattLinkCoordinator(hass, _config_entry(hass))
 
     with caplog.at_level(logging.DEBUG), pytest.raises(UpdateFailed) as error:
@@ -268,7 +289,17 @@ async def test_push_mode_logs_reachability_diagnostics_when_device_is_missing(
 
     assert error.value.translation_key == "bluetooth_device_unavailable"
     diagnostics.assert_called_once_with(hass, coordinator.address, connection_intent)
+    assert last_service_info.call_count == 2
+    scanner_devices.assert_called_once_with(
+        hass,
+        coordinator.address,
+        connectable=False,
+    )
     assert "[BT-DIAG] HA Bluetooth lookup" in caplog.text
+    assert (
+        "advertisement=present (reported_connectable=False), connectable_history=absent"
+    ) in caplog.text
+    assert "#1(scanner_connectable=True, scanning=True, rssi=-60)" in caplog.text
     assert "No connectable scanner currently sees device" in caplog.text
     assert "AA:BB:CC:DD:EE:FF" not in caplog.text
 
