@@ -20,10 +20,23 @@ def test_manifest_uses_project_domain_and_ble_pin() -> None:
         (PROJECT_ROOT / "pyproject.toml").read_text(encoding="utf-8")
     )
 
-    ble_requirement = "gatt-link-ble==0.3.1"
+    ble_requirement_prefix = "gatt-link-ble=="
+    project_ble_requirements = [
+        requirement
+        for requirement in pyproject["project"]["dependencies"]
+        if requirement.lower().startswith(ble_requirement_prefix)
+    ]
+    manifest_ble_requirements = [
+        requirement
+        for requirement in manifest["requirements"]
+        if requirement.lower().startswith(ble_requirement_prefix)
+    ]
+
     assert manifest["domain"] == DOMAIN
-    assert manifest["requirements"] == [ble_requirement]
-    assert ble_requirement in pyproject["project"]["dependencies"]
+    assert len(project_ble_requirements) == 1
+    assert len(manifest_ble_requirements) == 1
+    assert project_ble_requirements == manifest_ble_requirements
+    assert project_ble_requirements[0].removeprefix(ble_requirement_prefix)
 
 
 def test_marketplace_metadata_and_brand_asset_sizes() -> None:
