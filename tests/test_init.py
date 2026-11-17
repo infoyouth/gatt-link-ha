@@ -263,11 +263,12 @@ async def test_push_mode_logs_reachability_diagnostics_when_device_is_missing(
     )
     coordinator = GattLinkCoordinator(hass, _config_entry(hass))
 
-    with caplog.at_level(logging.WARNING), pytest.raises(UpdateFailed) as error:
+    with caplog.at_level(logging.DEBUG), pytest.raises(UpdateFailed) as error:
         await coordinator._async_update_data()
 
     assert error.value.translation_key == "bluetooth_device_unavailable"
     diagnostics.assert_called_once_with(hass, coordinator.address, connection_intent)
+    assert "[BT-DIAG] HA Bluetooth lookup" in caplog.text
     assert "No connectable scanner currently sees device" in caplog.text
     assert "AA:BB:CC:DD:EE:FF" not in caplog.text
 
@@ -430,6 +431,7 @@ async def test_push_setup_recovers_when_device_is_discovered(
     mock_gatt_link_client: FakeGattLinkClientFactory,
     mock_ble_device: BLEDevice,
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """A later Bluetooth discovery starts the client and adds supported sensors."""
     device_available = False
@@ -460,6 +462,7 @@ async def test_push_setup_recovers_when_device_is_discovered(
     state = hass.states.get("sensor.thingy_temperature")
     assert state is not None
     assert state.state == "20.0"
+    assert "[BT-DIAG] HA discovery callback" in caplog.text
     register_callback.return_value.assert_called_once()
     assert await hass.config_entries.async_unload(entry.entry_id)
 
@@ -470,6 +473,7 @@ async def test_push_setup_retries_when_discovery_event_is_missed(
     mock_gatt_link_client: FakeGattLinkClientFactory,
     mock_ble_device: BLEDevice,
     monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
 ) -> None:
     """The timed fallback starts the client if HA misses the discovery callback."""
     device_available = False
@@ -497,4 +501,5 @@ async def test_push_setup_retries_when_discovery_event_is_missed(
 
     assert entry.runtime_data.data is not None
     assert mock_gatt_link_client.clients[0].start_calls == 1
+    assert "[BT-DIAG] PUSH fallback retry fired" in caplog.text
     assert await hass.config_entries.async_unload(entry.entry_id)
