@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.7 (2026-11-17)
+
+### Chores
+
+- Add Bluetooth lookup diagnostics
+  ([`656a3b4`](https://github.com/infoyouth/gatt-link-ha/commit/656a3b4754bf5129f81b3fe39b118fb115421d57))
+
+
 ## v0.7.6 (2026-11-17)
 
 ### Bug Fixes
