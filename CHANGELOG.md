@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.6 (2026-11-17)
+
+### Bug Fixes
+
+- Handle missing state in diagnostics
+  ([`8b64a3d`](https://github.com/infoyouth/gatt-link-ha/commit/8b64a3d61899fdacd49f17d3a0951753120ef51c))
+
+
 ## v0.7.5 (2026-11-17)
 
 ### Bug Fixes
