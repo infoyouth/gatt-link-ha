@@ -29,7 +29,8 @@ from homeassistant.const import (
     UnitOfRatio,
     UnitOfTemperature,
 )
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.device_registry import format_mac
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
@@ -147,12 +148,60 @@ async def async_setup_entry(
 ) -> None:
     """Set up sensors for supported characteristics on this device."""
     coordinator = entry.runtime_data
-    supported_features = coordinator.data.supported_features
-    async_add_entities(
-        GattLinkSensor(coordinator, description)
-        for description in SENSORS
-        if not description.characteristic_uuids.isdisjoint(supported_features)
-    )
+    remove_listener: Callable[[], None] | None = None
+    added_sensor_keys: set[str] = set()
+    unique_id_prefix = format_mac(coordinator.address)
+    registered_unique_ids = {
+        registry_entry.unique_id
+        for registry_entry in er.async_entries_for_config_entry(
+            er.async_get(_hass), entry.entry_id
+        )
+    }
+
+    @callback
+    def _async_remove_listener() -> None:
+        nonlocal remove_listener
+        if remove_listener is not None:
+            remove_listener()
+            remove_listener = None
+
+    @callback
+    def _async_add_sensors_when_ready() -> None:
+        if coordinator.data is None:
+            descriptions = [
+                description
+                for description in SENSORS
+                if f"{unique_id_prefix}_{description.entity.key}"
+                in registered_unique_ids
+            ]
+        else:
+            supported_features = coordinator.data.supported_features
+            descriptions = [
+                description
+                for description in SENSORS
+                if not description.characteristic_uuids.isdisjoint(supported_features)
+            ]
+        descriptions = [
+            description
+            for description in descriptions
+            if description.entity.key not in added_sensor_keys
+        ]
+        if descriptions:
+            async_add_entities(
+                GattLinkSensor(coordinator, description) for description in descriptions
+            )
+            added_sensor_keys.update(
+                description.entity.key for description in descriptions
+            )
+        if coordinator.data is not None:
+            _async_remove_listener()
+
+    if coordinator.data is None:
+        remove_listener = coordinator.async_add_listener(_async_add_sensors_when_ready)
+        entry.async_on_unload(_async_remove_listener)
+        _async_add_sensors_when_ready()
+    else:
+        _async_add_sensors_when_ready()
 
 
 class GattLinkSensor(GattLinkEntity, SensorEntity):
@@ -177,4 +226,6 @@ class GattLinkSensor(GattLinkEntity, SensorEntity):
     @override
     def native_value(self) -> SensorValue:
         """Return the latest sensor value."""
+        if self.coordinator.data is None:
+            return None
         return self._value_fn(self.coordinator.data.sensors)

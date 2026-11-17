@@ -6,6 +6,8 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from bleak.backends.device import BLEDevice
+from custom_components.gatt_link import coordinator as coordinator_module
 from custom_components.gatt_link.const import (
     CONF_CONNECTION_MODE,
     CONF_SCAN_INTERVAL,
@@ -19,6 +21,7 @@ from homeassistant.components import bluetooth
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ConfigEntryError
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.update_coordinator import UpdateFailed
 from homeassistant.util import dt as dt_util
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -163,7 +166,7 @@ async def test_poll_mode_marks_data_unavailable_when_stale_then_recovers(
 
 
 @pytest.mark.asyncio
-async def test_poll_mode_marks_unavailable_when_device_is_missing(
+async def test_poll_mode_keeps_entry_loaded_when_device_is_missing(
     hass: HomeAssistant,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -181,7 +184,35 @@ async def test_poll_mode_marks_unavailable_when_device_is_missing(
         },
     )
 
-    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.runtime_data.data is None
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_registered_sensors_are_unavailable_when_device_is_missing(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Restore known sensors as unavailable if startup has no device state."""
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        lambda *_args, **_kwargs: None,
+    )
+    entry = _config_entry(hass)
+    registered_sensor = er.async_get(hass).async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "aa:bb:cc:dd:ee:ff_temperature",
+        config_entry=entry,
+    )
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    state = hass.states.get(registered_sensor.entity_id)
+    assert state is not None
+    assert state.state == STATE_UNAVAILABLE
+    assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 @pytest.mark.asyncio
@@ -199,7 +230,9 @@ async def test_poll_mode_translates_ble_read_errors(
         },
     )
 
-    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.runtime_data.data is None
+    assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 @pytest.mark.asyncio
@@ -376,7 +409,7 @@ async def test_options_update_reloads_client(
 
 
 @pytest.mark.asyncio
-async def test_push_connection_error_prevents_setup(
+async def test_push_connection_error_keeps_setup_loaded_for_retry(
     hass: HomeAssistant,
     mock_gatt_link_client: FakeGattLinkClientFactory,
 ) -> None:
@@ -384,6 +417,84 @@ async def test_push_connection_error_prevents_setup(
     entry = _config_entry(hass)
     mock_gatt_link_client.start_error = GattConnectionError("connection failed")
 
-    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert await hass.config_entries.async_setup(entry.entry_id)
 
     assert mock_gatt_link_client.clients[0].start_calls == 1
+    assert entry.runtime_data.data is None
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_push_setup_recovers_when_device_is_discovered(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+    mock_ble_device: BLEDevice,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A later Bluetooth discovery starts the client and adds supported sensors."""
+    device_available = False
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        lambda *_args, **_kwargs: mock_ble_device if device_available else None,
+    )
+    register_callback = Mock(return_value=Mock())
+    monkeypatch.setattr(bluetooth, "async_register_callback", register_callback)
+    entry = _config_entry(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.runtime_data.data is None
+    assert hass.states.get("sensor.thingy_temperature") is None
+    assert register_callback.call_args.args[2] == {
+        "address": "aa:bb:cc:dd:ee:ff",
+        "connectable": True,
+    }
+    assert register_callback.call_args.args[3] is bluetooth.BluetoothScanningMode.ACTIVE
+
+    device_available = True
+    register_callback.call_args.args[1](Mock(), Mock())
+    await hass.async_block_till_done()
+
+    assert entry.runtime_data.data is not None
+    assert mock_gatt_link_client.clients[0].start_calls == 1
+    state = hass.states.get("sensor.thingy_temperature")
+    assert state is not None
+    assert state.state == "20.0"
+    register_callback.return_value.assert_called_once()
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_push_setup_retries_when_discovery_event_is_missed(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+    mock_ble_device: BLEDevice,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The timed fallback starts the client if HA misses the discovery callback."""
+    device_available = False
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        lambda *_args, **_kwargs: mock_ble_device if device_available else None,
+    )
+    monkeypatch.setattr(bluetooth, "async_register_callback", Mock(return_value=Mock()))
+    retry_registration = Mock(return_value=Mock())
+    monkeypatch.setattr(
+        coordinator_module,
+        "async_track_time_interval",
+        retry_registration,
+    )
+    entry = _config_entry(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.runtime_data.data is None
+    assert retry_registration.call_args.args[2] == timedelta(seconds=30)
+
+    device_available = True
+    retry_registration.call_args.args[1](dt_util.utcnow())
+    await hass.async_block_till_done()
+
+    assert entry.runtime_data.data is not None
+    assert mock_gatt_link_client.clients[0].start_calls == 1
+    assert await hass.config_entries.async_unload(entry.entry_id)

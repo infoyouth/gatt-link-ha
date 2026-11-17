@@ -14,6 +14,10 @@ from gatt_link_ble import (
     GattLinkError,
 )
 from homeassistant.components import bluetooth
+from homeassistant.components.bluetooth import (
+    BluetoothChange,
+    BluetoothServiceInfoBleak,
+)
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryError
@@ -84,6 +88,8 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
         self._push_started = False
         self._unavailable_logged = False
         self._unsub_freshness_check: Callable[[], None] | None = None
+        self._unsub_bluetooth_callback: Callable[[], None] | None = None
+        self._unsub_connection_retry: Callable[[], None] | None = None
 
         update_interval = (
             timedelta(seconds=self._scan_interval)
@@ -101,11 +107,30 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
 
     def start_freshness_check(self) -> None:
         """Track freshness after the first successful coordinator refresh."""
-        if self.connection_mode is ConnectionMode.POLL_AND_DISCONNECT:
+        if (
+            self.connection_mode is ConnectionMode.POLL_AND_DISCONNECT
+            and self._unsub_freshness_check is None
+        ):
             self._unsub_freshness_check = async_track_time_interval(
                 self.hass,
                 self._async_check_data_freshness,
                 timedelta(seconds=self._scan_interval),
+            )
+
+    def start_connection_recovery(self) -> None:
+        """Retry startup when Bluetooth sees the configured device again."""
+        self._unsub_bluetooth_callback = bluetooth.async_register_callback(
+            self.hass,
+            self._async_handle_device_discovered,
+            {"address": self.address, "connectable": True},
+            bluetooth.BluetoothScanningMode.ACTIVE,
+            replay=bluetooth.BluetoothCallbackReplay.NEWEST_FIRST,
+        )
+        if self.connection_mode is ConnectionMode.PUSH:
+            self._unsub_connection_retry = async_track_time_interval(
+                self.hass,
+                self._async_retry_connection,
+                timedelta(seconds=30),
             )
 
     @property
@@ -154,13 +179,16 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                 ) from err
             self._log_recovered()
             async_delete_proxy_slots_issue(self.hass, self._config_entry)
+            self.start_freshness_check()
+            self._stop_connection_recovery()
             return state
 
         if self._client is None:
             ble_device = self._get_live_ble_device()
             if ble_device is None:
+                if not self._unavailable_logged:
+                    self._log_ble_reachability_diagnostics()
                 self._log_unavailable()
-                self._log_ble_reachability_diagnostics()
                 raise UpdateFailed(
                     translation_domain=DOMAIN,
                     translation_key="bluetooth_device_unavailable",
@@ -188,8 +216,34 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             self._push_started = True
             self._log_recovered()
             async_delete_proxy_slots_issue(self.hass, self._config_entry)
+            self._stop_connection_recovery()
 
         return self._client.state
+
+    @callback
+    def _async_handle_device_discovered(
+        self,
+        _service_info: BluetoothServiceInfoBleak,
+        _change: BluetoothChange,
+    ) -> None:
+        """Retry setup as soon as HA sees the configured connectable device."""
+        self.hass.async_create_task(self.async_request_refresh())
+
+    @callback
+    def _async_retry_connection(self, _now: datetime) -> None:
+        """Retry push startup periodically if a discovery event was missed."""
+        if self._client is None:
+            self.hass.async_create_task(self.async_request_refresh())
+
+    @callback
+    def _stop_connection_recovery(self) -> None:
+        """Stop startup retries after the first successful connection or poll."""
+        if self._unsub_bluetooth_callback is not None:
+            self._unsub_bluetooth_callback()
+            self._unsub_bluetooth_callback = None
+        if self._unsub_connection_retry is not None:
+            self._unsub_connection_retry()
+            self._unsub_connection_retry = None
 
     @callback
     def _get_live_ble_device(self) -> BLEDevice | None:
@@ -274,6 +328,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
     async def async_shutdown(self) -> None:
         """Stop the BLE client and coordinator refresh tasks."""
         try:
+            self._stop_connection_recovery()
             if self._unsub_freshness_check is not None:
                 self._unsub_freshness_check()
             if self._client is not None:
