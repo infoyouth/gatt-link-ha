@@ -1,0 +1,32 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "enabledManagers": ["pep621", "homeassistant-manifest", "github-actions"],
+  "schedule": ["before 6am on Monday"],
+  "minimumReleaseAge": "3 days",
+  "automerge": false,
+  "vulnerabilityAlerts": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchPackageNames": ["homeassistant"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "enabled": false
+    },
+    {
+      "matchManagers": ["pep621", "homeassistant-manifest"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "non-major Python dependencies"
+    },
+    {
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "non-major GitHub Actions"
+    },
+    {
+      "matchPackageNames": ["gatt-link-ble"],
+      "groupName": "gatt-link-ble"
+    }
+  ]
+}
