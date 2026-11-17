@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.7.5 (2026-11-17)
+
+### Bug Fixes
+
+- Recover BLE integration after startup misses
+  ([`710d647`](https://github.com/infoyouth/gatt-link-ha/commit/710d647974bb230c8d995327545052152cab8904))
+
+### Chores
+
+- Add temporary BLE startup diagnostics
+  ([`5b2ef46`](https://github.com/infoyouth/gatt-link-ha/commit/5b2ef465dbb1a2aa1dc8d0af6ba9a3f8144798c2))
+
+
 ## v0.7.4 (2026-11-17)
 
 ### Bug Fixes
