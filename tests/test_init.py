@@ -1,6 +1,9 @@
 """Tests for GATT Link config-entry setup and teardown."""
 
+import logging
 from datetime import timedelta
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 from custom_components.gatt_link.const import (
@@ -197,6 +200,128 @@ async def test_poll_mode_translates_ble_read_errors(
     )
 
     assert not await hass.config_entries.async_setup(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_push_mode_logs_reachability_diagnostics_when_device_is_missing(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """Push startup logs HA reachability details when lookup returns no device."""
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        lambda *_args, **_kwargs: None,
+    )
+    connection_intent = object()
+    diagnostics = Mock(return_value="No connectable scanner currently sees device")
+    monkeypatch.setattr(
+        bluetooth,
+        "BluetoothReachabilityIntent",
+        SimpleNamespace(CONNECTION=connection_intent),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        bluetooth,
+        "async_address_reachability_diagnostics",
+        diagnostics,
+        raising=False,
+    )
+    coordinator = GattLinkCoordinator(hass, _config_entry(hass))
+
+    with caplog.at_level(logging.WARNING), pytest.raises(UpdateFailed) as error:
+        await coordinator._async_update_data()
+
+    assert error.value.translation_key == "bluetooth_device_unavailable"
+    diagnostics.assert_called_once_with(hass, coordinator.address, connection_intent)
+    assert "No connectable scanner currently sees device" in caplog.text
+    assert "AA:BB:CC:DD:EE:FF" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_push_mode_does_not_collect_diagnostics_when_device_is_found(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A successful initial lookup does not collect failure diagnostics."""
+    diagnostics = Mock()
+    monkeypatch.setattr(
+        bluetooth,
+        "async_address_reachability_diagnostics",
+        diagnostics,
+        raising=False,
+    )
+    entry = _config_entry(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+
+    diagnostics.assert_not_called()
+    assert mock_gatt_link_client.clients[0].start_calls == 1
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_reachability_diagnostic_failure_preserves_update_error(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A diagnostics exception does not replace the original lookup failure."""
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        lambda *_args, **_kwargs: None,
+    )
+    connection_intent = object()
+    diagnostics = Mock(side_effect=RuntimeError("diagnostics unavailable"))
+    monkeypatch.setattr(
+        bluetooth,
+        "BluetoothReachabilityIntent",
+        SimpleNamespace(CONNECTION=connection_intent),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        bluetooth,
+        "async_address_reachability_diagnostics",
+        diagnostics,
+        raising=False,
+    )
+    coordinator = GattLinkCoordinator(hass, _config_entry(hass))
+
+    with caplog.at_level(logging.DEBUG), pytest.raises(UpdateFailed) as error:
+        await coordinator._async_update_data()
+
+    assert error.value.translation_key == "bluetooth_device_unavailable"
+    assert "Unable to collect Bluetooth reachability diagnostics (RuntimeError)" in (
+        caplog.text
+    )
+
+
+@pytest.mark.asyncio
+async def test_push_mode_preserves_error_when_reachability_api_is_unavailable(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Older supported HA versions without the diagnostic API still work."""
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.delattr(
+        bluetooth,
+        "async_address_reachability_diagnostics",
+        raising=False,
+    )
+    monkeypatch.delattr(bluetooth, "BluetoothReachabilityIntent", raising=False)
+    coordinator = GattLinkCoordinator(hass, _config_entry(hass))
+
+    with pytest.raises(UpdateFailed) as error:
+        await coordinator._async_update_data()
+
+    assert error.value.translation_key == "bluetooth_device_unavailable"
 
 
 def test_reconnect_provider_requires_a_previously_seen_ble_device(

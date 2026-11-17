@@ -160,6 +160,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             ble_device = self._get_live_ble_device()
             if ble_device is None:
                 self._log_unavailable()
+                self._log_ble_reachability_diagnostics()
                 raise UpdateFailed(
                     translation_domain=DOMAIN,
                     translation_key="bluetooth_device_unavailable",
@@ -198,6 +199,32 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             self.address,
             connectable=True,
         )
+
+    @callback
+    def _log_ble_reachability_diagnostics(self) -> None:
+        """Log why Home Assistant cannot currently resolve a connectable device."""
+        diagnostics_fn = getattr(
+            bluetooth, "async_address_reachability_diagnostics", None
+        )
+        intent_type = getattr(bluetooth, "BluetoothReachabilityIntent", None)
+        if not callable(diagnostics_fn) or intent_type is None:
+            _LOGGER.debug("Bluetooth reachability diagnostics are unavailable")
+            return
+
+        try:
+            diagnostics = diagnostics_fn(
+                self.hass,
+                self.address,
+                intent_type.CONNECTION,
+            )
+        except Exception as err:
+            _LOGGER.debug(
+                "Unable to collect Bluetooth reachability diagnostics (%s)",
+                type(err).__name__,
+            )
+            return
+
+        _LOGGER.warning("Bluetooth reachability diagnostics: %s", diagnostics)
 
     @callback
     def _get_ble_device_for_reconnect(self) -> BLEDevice:
