@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.3 (2026-11-17)
+
+### Bug Fixes
+
+- Avoid independent pytest dependency updates
+  ([`6f2aab3`](https://github.com/infoyouth/gatt-link-ha/commit/6f2aab3b1d68b7e5a814dd158b15bbd607cc6589))
+
+
 ## v0.7.2 (2026-11-17)
 
 ### Bug Fixes
