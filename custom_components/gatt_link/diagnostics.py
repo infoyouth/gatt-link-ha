@@ -19,6 +19,7 @@ async def async_get_config_entry_diagnostics(
     """Return redacted config-entry and latest device diagnostics."""
     state = entry.runtime_data.data
     device_state = asdict(state)
+    device_state["last_updated"] = state.last_updated.isoformat()
     device_state["supported_features"] = sorted(state.supported_features)
 
     return async_redact_data(

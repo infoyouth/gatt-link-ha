@@ -1035,15 +1035,15 @@ wheels = [
 
 [[package]]
 name = "gatt-link-ble"
-version = "0.3.1"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "bleak" },
     { name = "bleak-retry-connector" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d3/40/807ec9556c8b86168961adb6265622a90559ca31ccae37098384bb9a8652/gatt_link_ble-0.3.1.tar.gz", hash = "sha256:654f6eccb15e86adc60ef5fbfb67887f8adff299d16deef69dd2543337f2ef72", size = 65660, upload-time = "2026-11-13T10:37:52.797Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/35/d5/e00be46bfd6d151416a531072800636495e33b8ee29b7fec1c1933cf1ad9/gatt_link_ble-0.6.0.tar.gz", hash = "sha256:d095e4e7f6221017a805fec95b6f678835742e0aea374a5d469f146ef3521525", size = 59467, upload-time = "2026-11-17T16:06:34.55Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1f/24/69c6fde6177cb1601ba6c5268bb36820495cc258d55e82e5e0c1361cc05e/gatt_link_ble-0.3.1-py3-none-any.whl", hash = "sha256:cc1b88a78ab746a879480dc23306a27d411f1616ab2dcb12ba1e0cc18cd039e9", size = 14108, upload-time = "2026-11-13T10:37:51.454Z" },
+    { url = "https://files.pythonhosted.org/packages/c8/c9/89cdb46d2f84b8b61f7ef85fd482be9f05dc77ee9db2c52e4e4c1bac5135/gatt_link_ble-0.6.0-py3-none-any.whl", hash = "sha256:23eeef22a85a604cf76f17460c41625e0c16c24a68ec1723ecf6edad94ac262e", size = 16202, upload-time = "2026-11-17T16:06:33.172Z" },
 ]
 
 [[package]]
@@ -1066,7 +1066,7 @@ dev = [
 ]
 
 [package.metadata]
-requires-dist = [{ name = "gatt-link-ble", specifier = "==0.3.1" }]
+requires-dist = [{ name = "gatt-link-ble", specifier = "==0.6.0" }]
 
 [package.metadata.requires-dev]
 dev = [
