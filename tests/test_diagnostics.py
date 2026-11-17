@@ -9,6 +9,7 @@ from custom_components.gatt_link.diagnostics import (
     async_get_config_entry_diagnostics,
 )
 from gatt_link_ble import DeviceMetadata
+from homeassistant.components import bluetooth
 from homeassistant.components.diagnostics import REDACTED
 from homeassistant.core import HomeAssistant
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -54,4 +55,31 @@ async def test_diagnostics_redact_address_and_unique_id(
     )
     assert diagnostics["device_state"]["metadata"] == asdict(metadata)
     assert diagnostics["device_state"]["sensors"] == asdict(DEFAULT_STATE.sensors)
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_diagnostics_without_device_state(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Diagnostics remain available if the device has not been reached yet."""
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        lambda *_args, **_kwargs: None,
+    )
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Thingy",
+        unique_id="aa:bb:cc:dd:ee:ff",
+        data={"address": "AA:BB:CC:DD:EE:FF"},
+    )
+    entry.add_to_hass(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    assert entry.runtime_data.data is None
+
+    diagnostics = await async_get_config_entry_diagnostics(hass, entry)
+
+    assert diagnostics["device_state"] is None
     assert await hass.config_entries.async_unload(entry.entry_id)
