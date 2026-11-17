@@ -2,7 +2,6 @@
 
 import pytest
 from custom_components.gatt_link.const import DOMAIN
-from custom_components.gatt_link.coordinator import GattLinkCoordinator
 from gatt_link_ble.exceptions import GattConnectionError
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
@@ -29,14 +28,14 @@ async def test_proxy_slot_issue_is_created_and_cleared_on_recovery(
     issue_id = f"proxy_slots_{entry.entry_id}"
     mock_gatt_link_client.start_error = GattConnectionError("ESP_GATT_CONN_CONN_CANCEL")
 
-    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert await hass.config_entries.async_setup(entry.entry_id)
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is not None
 
     mock_gatt_link_client.start_error = None
-    coordinator = GattLinkCoordinator(hass, entry)
-    await coordinator._async_update_data()
+    coordinator = entry.runtime_data
+    await coordinator.async_refresh()
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
-    await coordinator.async_shutdown()
+    assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 @pytest.mark.asyncio
@@ -54,9 +53,10 @@ async def test_unrelated_connection_error_does_not_create_repair(
     entry.add_to_hass(hass)
     mock_gatt_link_client.start_error = GattConnectionError("connection failed")
 
-    assert not await hass.config_entries.async_setup(entry.entry_id)
+    assert await hass.config_entries.async_setup(entry.entry_id)
     assert not any(
         issue_id.startswith("proxy_slots_")
         for domain, issue_id in ir.async_get(hass).issues
         if domain == DOMAIN
     )
+    assert await hass.config_entries.async_unload(entry.entry_id)

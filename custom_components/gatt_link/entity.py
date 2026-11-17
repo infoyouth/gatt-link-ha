@@ -30,9 +30,12 @@ class GattLinkEntity(CoordinatorEntity[GattLinkCoordinator]):
         return DeviceInfo(
             connections={(dr.CONNECTION_BLUETOOTH, address)},
             identifiers={(DOMAIN, address)},
-            manufacturer=state.metadata.manufacturer,
-            model=state.metadata.model,
-            name=state.name or self.coordinator.device_name,
-            sw_version=state.metadata.firmware_revision,
-            hw_version=state.metadata.hardware_revision,
+            manufacturer=state.metadata.manufacturer if state is not None else None,
+            model=state.metadata.model if state is not None else None,
+            name=(state.name if state is not None else None)
+            or self.coordinator.device_name,
+            sw_version=(
+                state.metadata.firmware_revision if state is not None else None
+            ),
+            hw_version=state.metadata.hardware_revision if state is not None else None,
         )
