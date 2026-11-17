@@ -2,6 +2,19 @@
 
 <!-- version list -->
 
+## v0.7.4 (2026-11-17)
+
+### Bug Fixes
+
+- Update BLE dependency to 0.6.0
+  ([`f06e002`](https://github.com/infoyouth/gatt-link-ha/commit/f06e002d3907b8abe91c6d41ccd14269042c3a8e))
+
+### Chores
+
+- Replace Dependabot with Renovate
+  ([`14b317c`](https://github.com/infoyouth/gatt-link-ha/commit/14b317cb958928c386a21bc945a670d7f8a79424))
+
+
 ## v0.7.3 (2026-11-17)
 
 ### Bug Fixes
