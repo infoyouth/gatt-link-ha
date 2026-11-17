@@ -2,6 +2,28 @@
 
 <!-- version list -->
 
+## v0.7.2 (2026-11-17)
+
+### Bug Fixes
+
+- Log bluetooth reachability diagnostics
+  ([`18a1e89`](https://github.com/infoyouth/gatt-link-ha/commit/18a1e895a832c0ce1ebdf3a85797f47e3aa77e20))
+
+### Chores
+
+- **deps**: Bump actions/setup-python ([#19](https://github.com/infoyouth/gatt-link-ha/pull/19),
+  [`21efa6f`](https://github.com/infoyouth/gatt-link-ha/commit/21efa6f1320e46c7b138ded15c509cda02ad680a))
+
+- **deps**: Bump dependabot/fetch-metadata from 2.5.0 to 3.1.0
+  ([`1ccc5bf`](https://github.com/infoyouth/gatt-link-ha/commit/1ccc5bfd9f6a825baa08520e780e65ab361bd005))
+
+- **deps**: Bump peter-evans/create-pull-request from 7.0.11 to 8.1.3
+  ([`1cf8f70`](https://github.com/infoyouth/gatt-link-ha/commit/1cf8f70371cce2f2bf4eed994d5f4d5803828da5))
+
+- **deps-dev**: Bump serialx ([#22](https://github.com/infoyouth/gatt-link-ha/pull/22),
+  [`6c5d603`](https://github.com/infoyouth/gatt-link-ha/commit/6c5d6036f3bfa85ef03320cbf463e10edd0eba5b))
+
+
 ## v0.7.1 (2026-11-16)
 
 ### Bug Fixes
