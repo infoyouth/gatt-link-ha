@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.10 (2026-11-18)
+
+### Bug Fixes
+
+- **bluetooth**: Report discovery resolution sources
+  ([`a8f30f3`](https://github.com/infoyouth/gatt-link-ha/commit/a8f30f3a58a8250f8d504389efbcd788b36053fa))
+
+
 ## v0.7.9 (2026-11-18)
 
 ### Bug Fixes
