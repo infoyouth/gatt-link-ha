@@ -605,8 +605,14 @@ async def test_push_setup_recovers_when_device_is_discovered(
     }
     assert register_callback.call_args.args[3] is bluetooth.BluetoothScanningMode.ACTIVE
 
-    device_available = True
-    register_callback.call_args.args[1](Mock(), Mock())
+    register_callback.call_args.args[1](
+        SimpleNamespace(
+            connectable=True,
+            rssi=-60,
+            device=mock_ble_device,
+        ),
+        Mock(),
+    )
     await hass.async_block_till_done()
 
     assert entry.runtime_data.data is not None
