@@ -295,12 +295,24 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             self.address,
             connectable=True,
         )
+        used_fallback = ble_device is None
+        if used_fallback:
+            ble_device = bluetooth.async_ble_device_from_address(
+                self.hass,
+                self.address,
+                connectable=False,
+            )
         _LOGGER.debug(
             "[BT-DIAG] HA Bluetooth lookup for %s (mode=%s, connectable=True): %s",
             self.device_name,
             self.connection_mode.value,
             "found" if ble_device is not None else "not found",
         )
+        if ble_device is not None and used_fallback:
+            _LOGGER.debug(
+                "[BT-DIAG] HA Bluetooth lookup resolved %s from fallback history",
+                self.device_name,
+            )
         if ble_device is None:
             scanner_devices = bluetooth.async_scanner_devices_by_address(
                 self.hass,
