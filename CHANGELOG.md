@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.8 (2026-11-18)
+
+### Bug Fixes
+
+- **bluetooth**: Fall back to all-device lookup
+  ([`e812fba`](https://github.com/infoyouth/gatt-link-ha/commit/e812fbacd391ae6e5a3df5b2faa075edacfd1b0d))
+
+
 ## v0.7.7 (2026-11-17)
 
 ### Chores
