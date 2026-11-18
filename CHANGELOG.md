@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.9 (2026-11-18)
+
+### Bug Fixes
+
+- **bluetooth**: Cache devices from discovery callbacks
+  ([`87d3d38`](https://github.com/infoyouth/gatt-link-ha/commit/87d3d38d4f43bcc10e905e225e2e76c3b12c4f81))
+
+
 ## v0.7.8 (2026-11-18)
 
 ### Bug Fixes
