@@ -252,7 +252,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
     @callback
     def _async_handle_device_discovered(
         self,
-        _service_info: BluetoothServiceInfoBleak,
+        service_info: BluetoothServiceInfoBleak,
         _change: BluetoothChange,
     ) -> None:
         """Retry setup as soon as HA sees the configured connectable device."""
@@ -261,9 +261,11 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             "rssi=%s); requesting refresh",
             self.device_name,
             _change,
-            _service_info.connectable,
-            _service_info.rssi,
+            service_info.connectable,
+            service_info.rssi,
         )
+        if service_info.connectable:
+            self._last_ble_device = service_info.device
         self.hass.async_create_task(self.async_request_refresh())
 
     @callback
@@ -302,6 +304,8 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                 self.address,
                 connectable=False,
             )
+        if ble_device is None:
+            ble_device = self._last_ble_device
         _LOGGER.debug(
             "[BT-DIAG] HA Bluetooth lookup for %s (mode=%s, connectable=True): %s",
             self.device_name,
