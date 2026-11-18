@@ -264,8 +264,21 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             service_info.connectable,
             service_info.rssi,
         )
-        if service_info.connectable:
+        if (
+            service_info.connectable
+            and format_mac(service_info.address) == self.address
+        ):
             self._last_ble_device = service_info.device
+            _LOGGER.debug(
+                "[BT-DIAG] Cached BLEDevice from discovery callback for %s",
+                self.device_name,
+            )
+        else:
+            _LOGGER.debug(
+                "[BT-DIAG] Discovery callback for %s did not match (connectable=%s)",
+                self.device_name,
+                service_info.connectable,
+            )
         self.hass.async_create_task(self.async_request_refresh())
 
     @callback
@@ -297,26 +310,54 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             self.address,
             connectable=True,
         )
-        used_fallback = ble_device is None
-        if used_fallback:
+        connectable_lookup = ble_device is not None
+        all_history_lookup = False
+        cached_lookup = False
+        discovered_lookup = False
+        discovered_count = 0
+
+        if ble_device is None:
             ble_device = bluetooth.async_ble_device_from_address(
                 self.hass,
                 self.address,
                 connectable=False,
             )
+            all_history_lookup = ble_device is not None
+
         if ble_device is None:
             ble_device = self._last_ble_device
+            cached_lookup = ble_device is not None
+
+        if ble_device is None:
+            discovered_services = bluetooth.async_discovered_service_info(
+                self.hass,
+                connectable=True,
+            )
+            discovered_services = list(discovered_services)
+            discovered_count = len(discovered_services)
+            for service_info in discovered_services:
+                if format_mac(service_info.address) == self.address:
+                    ble_device = service_info.device
+                    self._last_ble_device = ble_device
+                    discovered_lookup = True
+                    break
+
+        _LOGGER.debug(
+            "[BT-DIAG] BLE resolution sources for %s: connectable=%s, "
+            "all_history=%s, cached=%s, discovered=%s, discovered_count=%s",
+            self.device_name,
+            connectable_lookup,
+            all_history_lookup,
+            cached_lookup,
+            discovered_lookup,
+            discovered_count,
+        )
         _LOGGER.debug(
             "[BT-DIAG] HA Bluetooth lookup for %s (mode=%s, connectable=True): %s",
             self.device_name,
             self.connection_mode.value,
             "found" if ble_device is not None else "not found",
         )
-        if ble_device is not None and used_fallback:
-            _LOGGER.debug(
-                "[BT-DIAG] HA Bluetooth lookup resolved %s from fallback history",
-                self.device_name,
-            )
         if ble_device is None:
             scanner_devices = bluetooth.async_scanner_devices_by_address(
                 self.hass,

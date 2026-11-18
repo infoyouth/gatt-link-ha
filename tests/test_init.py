@@ -426,6 +426,37 @@ async def test_push_mode_falls_back_to_all_device_history(
 
 
 @pytest.mark.asyncio
+async def test_push_mode_falls_back_to_discovered_service_info(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+    mock_ble_device: BLEDevice,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Push starts when HA discovery list contains MyT but history lookups do not."""
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        bluetooth,
+        "async_discovered_service_info",
+        lambda *_args, **_kwargs: [
+            SimpleNamespace(
+                address="AA:BB:CC:DD:EE:FF",
+                device=mock_ble_device,
+            )
+        ],
+    )
+    entry = _config_entry(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+
+    assert mock_gatt_link_client.clients[0].start_calls == 1
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
 async def test_push_mode_does_not_collect_diagnostics_when_device_is_found(
     hass: HomeAssistant,
     mock_gatt_link_client: FakeGattLinkClientFactory,
@@ -607,6 +638,7 @@ async def test_push_setup_recovers_when_device_is_discovered(
 
     register_callback.call_args.args[1](
         SimpleNamespace(
+            address="AA:BB:CC:DD:EE:FF",
             connectable=True,
             rssi=-60,
             device=mock_ble_device,
