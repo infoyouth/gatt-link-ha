@@ -1,12 +1,14 @@
 """Tests for GATT Link config-entry setup and teardown."""
 
 import logging
+import time
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
 from bleak.backends.device import BLEDevice
+from bleak.backends.scanner import AdvertisementData
 from custom_components.gatt_link import coordinator as coordinator_module
 from custom_components.gatt_link.const import (
     CONF_CONNECTION_MODE,
@@ -17,6 +19,7 @@ from custom_components.gatt_link.const import (
 from custom_components.gatt_link.coordinator import GattLinkCoordinator
 from gatt_link_ble import ConnectionMode
 from gatt_link_ble.exceptions import GattConnectionError
+from habluetooth import BaseHaScanner
 from homeassistant.components import bluetooth
 from homeassistant.const import STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
@@ -29,6 +32,30 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from tests.helpers import FakeGattLinkClientFactory
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
+
+
+class _TestBluetoothScanner(BaseHaScanner):
+    """Provide discovered advertisement data for a synthetic scanner."""
+
+    def get_discovered_device_advertisement_data(
+        self,
+        address: str,
+    ) -> tuple[BLEDevice, AdvertisementData] | None:
+        """Return synthetic advertisement data recorded by the base scanner."""
+        if (service_info := self._previous_service_info.get(address)) is None:
+            return None
+        return (
+            service_info.device,
+            AdvertisementData(
+                service_info.name,
+                service_info.manufacturer_data,
+                service_info.service_data,
+                service_info.service_uuids,
+                service_info.tx_power,
+                service_info.rssi,
+                (),
+            ),
+        )
 
 
 def _config_entry(
@@ -99,6 +126,68 @@ async def test_push_setup_starts_client_and_unload_stops_it(
     assert mock_gatt_link_client.clients[0].start_calls == 1
 
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("scanner_connectable", "expected_connectable_lookup"),
+    [(True, True), (False, False)],
+)
+async def test_live_bluetooth_manager_indexes_scanner_advertisements(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+    scanner_connectable: bool,
+    expected_connectable_lookup: bool,
+) -> None:
+    """Exercise HA's Bluetooth histories and lookup with a synthetic scanner."""
+    entry = _config_entry(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+
+    scanner = _TestBluetoothScanner(
+        source="test-scanner",
+        adapter="test-adapter",
+        connectable=scanner_connectable,
+    )
+    unsubscribe_scanner = bluetooth.async_register_scanner(hass, scanner)
+    try:
+        scanner._async_on_advertisement(
+            address="aa:bb:cc:dd:ee:ff",
+            rssi=-60,
+            local_name="Thingy",
+            service_uuids=["ef680100-9b35-4933-9b10-52ffa9740042"],
+            service_data={},
+            manufacturer_data={},
+            tx_power=None,
+            details={},
+            advertisement_monotonic_time=time.monotonic(),
+        )
+        await hass.async_block_till_done()
+
+        assert scanner._previous_service_info.get("aa:bb:cc:dd:ee:ff") is not None
+
+        coordinator = entry.runtime_data
+        scanner_devices = bluetooth.async_scanner_devices_by_address(
+            hass,
+            coordinator.address,
+            connectable=False,
+        )
+        all_history = bluetooth.async_last_service_info(
+            hass,
+            coordinator.address,
+            connectable=False,
+        )
+        connectable_history = bluetooth.async_last_service_info(
+            hass,
+            coordinator.address,
+            connectable=True,
+        )
+        assert len(scanner_devices) == 1
+        assert all_history is not None
+        assert all_history.service_uuids == ["ef680100-9b35-4933-9b10-52ffa9740042"]
+        assert (connectable_history is not None) is expected_connectable_lookup
+    finally:
+        unsubscribe_scanner()
+        assert await hass.config_entries.async_unload(entry.entry_id)
     assert mock_gatt_link_client.clients[0].stop_calls == 1
 
 
@@ -302,6 +391,38 @@ async def test_push_mode_logs_reachability_diagnostics_when_device_is_missing(
     assert "#1(scanner_connectable=True, scanning=True, rssi=-60)" in caplog.text
     assert "No connectable scanner currently sees device" in caplog.text
     assert "AA:BB:CC:DD:EE:FF" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_push_mode_falls_back_to_all_device_history(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Push starts when HA exposes the BLE device only in all-history lookup."""
+    live_lookup = Mock(
+        side_effect=lambda _hass, _address, connectable=True: (
+            None if connectable else BLEDevice("AA:BB:CC:DD:EE:FF", "Thingy", {})
+        )
+    )
+    monkeypatch.setattr(
+        bluetooth,
+        "async_ble_device_from_address",
+        live_lookup,
+    )
+    entry = _config_entry(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+
+    assert live_lookup.call_count >= 2
+    assert any(
+        call.kwargs["connectable"] is True for call in live_lookup.call_args_list
+    )
+    assert any(
+        call.kwargs["connectable"] is False for call in live_lookup.call_args_list
+    )
+    assert mock_gatt_link_client.clients[0].start_calls == 1
+    assert await hass.config_entries.async_unload(entry.entry_id)
 
 
 @pytest.mark.asyncio
