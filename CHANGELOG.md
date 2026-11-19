@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.11 (2026-11-19)
+
+### Bug Fixes
+
+- **bluetooth**: Clarify discovery and connection state logs
+  ([`2882384`](https://github.com/infoyouth/gatt-link-ha/commit/2882384856854ffead0ae8a2f74303e8d63adc3f))
+
+
 ## v0.7.10 (2026-11-18)
 
 ### Bug Fixes
