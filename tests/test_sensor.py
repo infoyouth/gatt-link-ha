@@ -129,8 +129,8 @@ async def test_push_updates_sensor_and_availability(
     assert [
         record.message
         for record in caplog.records
-        if record.message == "Device Thingy went offline"
-    ] == ["Device Thingy went offline"]
+        if record.message == "Thingy is offline: Bluetooth connection unavailable"
+    ] == ["Thingy is offline: Bluetooth connection unavailable"]
 
     client.publish(DEFAULT_STATE)
     client.publish(DEFAULT_STATE)
@@ -139,6 +139,6 @@ async def test_push_updates_sensor_and_availability(
     assert [
         record.message
         for record in caplog.records
-        if record.message == "Device Thingy reconnected"
-    ] == ["Device Thingy reconnected"]
+        if record.message == "Thingy is online: Bluetooth connection recovered"
+    ] == ["Thingy is online: Bluetooth connection recovered"]
     assert await hass.config_entries.async_unload(entry.entry_id)

@@ -342,22 +342,29 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                     discovered_lookup = True
                     break
 
-        _LOGGER.debug(
-            "[BT-DIAG] BLE resolution sources for %s: connectable=%s, "
-            "all_history=%s, cached=%s, discovered=%s, discovered_count=%s",
-            self.device_name,
-            connectable_lookup,
-            all_history_lookup,
-            cached_lookup,
-            discovered_lookup,
-            discovered_count,
+        resolution_source = (
+            "connectable lookup"
+            if connectable_lookup
+            else "all-history lookup"
+            if all_history_lookup
+            else "discovery callback cache"
+            if cached_lookup
+            else "discovered devices"
+            if discovered_lookup
+            else None
         )
-        _LOGGER.debug(
-            "[BT-DIAG] HA Bluetooth lookup for %s (mode=%s, connectable=True): %s",
-            self.device_name,
-            self.connection_mode.value,
-            "found" if ble_device is not None else "not found",
-        )
+        if ble_device is not None:
+            _LOGGER.debug(
+                "Bluetooth resolved %s via %s",
+                self.device_name,
+                resolution_source,
+            )
+        else:
+            _LOGGER.debug(
+                "Bluetooth could not resolve %s (discovered devices checked: %s)",
+                self.device_name,
+                discovered_count,
+            )
         if ble_device is None:
             scanner_devices = bluetooth.async_scanner_devices_by_address(
                 self.hass,
@@ -439,14 +446,18 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
     def _log_unavailable(self) -> None:
         """Log an offline transition once."""
         if not self._unavailable_logged:
-            _LOGGER.warning("Device %s went offline", self.device_name)
+            _LOGGER.warning(
+                "%s is offline: Bluetooth connection unavailable", self.device_name
+            )
             self._unavailable_logged = True
 
     @callback
     def _log_recovered(self) -> None:
         """Log a recovery transition once."""
         if self._unavailable_logged:
-            _LOGGER.info("Device %s reconnected", self.device_name)
+            _LOGGER.info(
+                "%s is online: Bluetooth connection recovered", self.device_name
+            )
             self._unavailable_logged = False
 
     @callback
