@@ -384,7 +384,7 @@ async def test_push_mode_logs_reachability_diagnostics_when_device_is_missing(
         coordinator.address,
         connectable=False,
     )
-    assert "[BT-DIAG] HA Bluetooth lookup" in caplog.text
+    assert "Bluetooth could not resolve" in caplog.text
     assert (
         "advertisement=present (reported_connectable=False), connectable_history=absent"
     ) in caplog.text
