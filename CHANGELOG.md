@@ -2,6 +2,17 @@
 
 <!-- version list -->
 
+## v0.7.12 (2026-11-23)
+
+### Bug Fixes
+
+- Clean up reviewed integration findings
+  ([`00ec471`](https://github.com/infoyouth/gatt-link-ha/commit/00ec47135d5448b16fb7c9c947cb3d90a5ca6fc3))
+
+- Clear proxy repair after push recovery
+  ([`9b4d8bd`](https://github.com/infoyouth/gatt-link-ha/commit/9b4d8bddbed59605bb83fd0c610fdfca29e86fd2))
+
+
 ## v0.7.11 (2026-11-19)
 
 ### Bug Fixes
