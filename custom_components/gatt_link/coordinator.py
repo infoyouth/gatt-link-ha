@@ -463,6 +463,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
         """Publish state updates after the initial connection has started."""
         if self._push_started:
             self._log_recovered()
+            async_delete_proxy_slots_issue(self.hass, self._config_entry)
             self.async_set_updated_data(state)
 
     @callback

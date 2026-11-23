@@ -2,12 +2,13 @@
 
 import pytest
 from custom_components.gatt_link.const import DOMAIN
+from custom_components.gatt_link.repairs import async_handle_connection_error
 from gatt_link_ble.exceptions import GattConnectionError
 from homeassistant.core import HomeAssistant
 from homeassistant.helpers import issue_registry as ir
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from tests.helpers import FakeGattLinkClientFactory
+from tests.helpers import DEFAULT_STATE, FakeGattLinkClientFactory
 
 pytestmark = pytest.mark.usefixtures("enable_custom_integrations")
 
@@ -34,6 +35,37 @@ async def test_proxy_slot_issue_is_created_and_cleared_on_recovery(
     mock_gatt_link_client.start_error = None
     coordinator = entry.runtime_data
     await coordinator.async_refresh()
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_proxy_slot_issue_clears_on_push_state_recovery(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+) -> None:
+    """Successful PUSH state publication clears stale proxy guidance."""
+    entry = MockConfigEntry(
+        domain=DOMAIN,
+        title="Thingy",
+        unique_id="aa:bb:cc:dd:ee:ff",
+        data={"address": "AA:BB:CC:DD:EE:FF"},
+    )
+    entry.add_to_hass(hass)
+
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    issue_id = f"proxy_slots_{entry.entry_id}"
+    async_handle_connection_error(
+        hass,
+        entry,
+        GattConnectionError("ESP_GATT_CONN_CONN_CANCEL"),
+    )
+    assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is not None
+
+    client = mock_gatt_link_client.clients[0]
+    client.disconnect()
+    client.publish(DEFAULT_STATE)
+
     assert ir.async_get(hass).async_get_issue(DOMAIN, issue_id) is None
     assert await hass.config_entries.async_unload(entry.entry_id)
 
