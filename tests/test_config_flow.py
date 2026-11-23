@@ -402,7 +402,7 @@ async def test_options_flow_rejects_nonpositive_interval(
     result = await hass.config_entries.options.async_configure(
         result["flow_id"],
         user_input={
-            CONF_CONNECTION_MODE: CONNECTION_MODE_PUSH,
+            CONF_CONNECTION_MODE: CONNECTION_MODE_POLL_AND_DISCONNECT,
             CONF_SCAN_INTERVAL: 0,
         },
     )
