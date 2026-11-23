@@ -121,8 +121,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
     def start_connection_recovery(self) -> None:
         """Retry startup when Bluetooth sees the configured device again."""
         _LOGGER.debug(
-            "[BT-DIAG] Registering connectable-device discovery callback for %s "
-            "(mode=%s)",
+            "Registering connectable-device discovery callback for %s (mode=%s)",
             self.device_name,
             self.connection_mode.value,
         )
@@ -140,7 +139,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                 CONNECTION_RETRY_INTERVAL,
             )
             _LOGGER.debug(
-                "[BT-DIAG] Scheduled fallback connection retries for %s every %s",
+                "Scheduled fallback connection retries for %s every %s",
                 self.device_name,
                 CONNECTION_RETRY_INTERVAL,
             )
@@ -180,14 +179,14 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                 name=self.device_name,
             )
             _LOGGER.debug(
-                "[BT-DIAG] Starting poll-and-disconnect client for %s",
+                "Starting poll-and-disconnect client for %s",
                 self.device_name,
             )
             try:
                 state = await client.poll()
             except GattLinkError as err:
                 _LOGGER.debug(
-                    "[BT-DIAG] Poll failed for %s (%s)",
+                    "Poll failed for %s (%s)",
                     self.device_name,
                     type(err).__name__,
                 )
@@ -199,7 +198,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                     translation_key="read_failed",
                 ) from err
             self._log_recovered()
-            _LOGGER.debug("[BT-DIAG] Poll succeeded for %s", self.device_name)
+            _LOGGER.debug("Poll succeeded for %s", self.device_name)
             async_delete_proxy_slots_issue(self.hass, self._config_entry)
             self.start_freshness_check()
             self._stop_connection_recovery()
@@ -224,12 +223,12 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                 state_callback=self._handle_state_update,
                 disconnect_callback=self._handle_disconnect,
             )
-            _LOGGER.debug("[BT-DIAG] Starting PUSH client for %s", self.device_name)
+            _LOGGER.debug("Starting PUSH client for %s", self.device_name)
             try:
                 await client.start()
             except GattLinkError as err:
                 _LOGGER.debug(
-                    "[BT-DIAG] PUSH client start failed for %s (%s)",
+                    "PUSH client start failed for %s (%s)",
                     self.device_name,
                     type(err).__name__,
                 )
@@ -243,7 +242,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             self._client = client
             self._push_started = True
             self._log_recovered()
-            _LOGGER.debug("[BT-DIAG] PUSH client started for %s", self.device_name)
+            _LOGGER.debug("PUSH client started for %s", self.device_name)
             async_delete_proxy_slots_issue(self.hass, self._config_entry)
             self._stop_connection_recovery()
 
@@ -257,7 +256,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
     ) -> None:
         """Retry setup as soon as HA sees the configured connectable device."""
         _LOGGER.debug(
-            "[BT-DIAG] HA discovery callback for %s (change=%s, connectable=%s, "
+            "HA discovery callback for %s (change=%s, connectable=%s, "
             "rssi=%s); requesting refresh",
             self.device_name,
             _change,
@@ -270,12 +269,12 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
         ):
             self._last_ble_device = service_info.device
             _LOGGER.debug(
-                "[BT-DIAG] Cached BLEDevice from discovery callback for %s",
+                "Cached BLEDevice from discovery callback for %s",
                 self.device_name,
             )
         else:
             _LOGGER.debug(
-                "[BT-DIAG] Discovery callback for %s did not match (connectable=%s)",
+                "Discovery callback for %s did not match (connectable=%s)",
                 self.device_name,
                 service_info.connectable,
             )
@@ -286,7 +285,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
         """Retry push startup periodically if a discovery event was missed."""
         if self._client is None:
             _LOGGER.debug(
-                "[BT-DIAG] PUSH fallback retry fired for %s; requesting refresh",
+                "PUSH fallback retry fired for %s; requesting refresh",
                 self.device_name,
             )
             self.hass.async_create_task(self.async_request_refresh())
@@ -300,7 +299,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
         if self._unsub_connection_retry is not None:
             self._unsub_connection_retry()
             self._unsub_connection_retry = None
-        _LOGGER.debug("[BT-DIAG] Stopped startup recovery for %s", self.device_name)
+        _LOGGER.debug("Stopped startup recovery for %s", self.device_name)
 
     @callback
     def _get_live_ble_device(self) -> BLEDevice | None:
@@ -353,19 +352,18 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             if discovered_lookup
             else None
         )
-        if ble_device is not None:
+        if ble_device is not None and _LOGGER.isEnabledFor(logging.DEBUG):
             _LOGGER.debug(
                 "Bluetooth resolved %s via %s",
                 self.device_name,
                 resolution_source,
             )
-        else:
+        elif ble_device is None and _LOGGER.isEnabledFor(logging.DEBUG):
             _LOGGER.debug(
                 "Bluetooth could not resolve %s (discovered devices checked: %s)",
                 self.device_name,
                 discovered_count,
             )
-        if ble_device is None:
             scanner_devices = bluetooth.async_scanner_devices_by_address(
                 self.hass,
                 self.address,
@@ -382,7 +380,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                 connectable=True,
             )
             _LOGGER.debug(
-                "[BT-DIAG] HA scanner history for %s: advertisement=%s "
+                "HA scanner history for %s: advertisement=%s "
                 "(reported_connectable=%s), connectable_history=%s",
                 self.device_name,
                 "present" if advertisement is not None else "absent",
@@ -390,7 +388,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                 "present" if connectable_advertisement is not None else "absent",
             )
             _LOGGER.debug(
-                "[BT-DIAG] HA scanners seeing %s: %s",
+                "HA scanners seeing %s: %s",
                 self.device_name,
                 [
                     (
@@ -428,7 +426,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             )
             return
 
-        _LOGGER.warning("[BT-DIAG] Bluetooth reachability diagnostics: %s", diagnostics)
+        _LOGGER.warning("Bluetooth reachability diagnostics: %s", diagnostics)
 
     @callback
     def _get_ble_device_for_reconnect(self) -> BLEDevice:
@@ -465,7 +463,6 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
         """Publish state updates after the initial connection has started."""
         if self._push_started:
             self._log_recovered()
-            async_delete_proxy_slots_issue(self.hass, self._config_entry)
             self.async_set_updated_data(state)
 
     @callback

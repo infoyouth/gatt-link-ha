@@ -27,7 +27,7 @@ The setup flow does not require a password, token, or network address. To replac
 
 Supported devices include:
 
-- Nordic Thingy:52 and Thingy:53 devices advertising the Thingy environment service
+- Nordic Thingy:52 and Thingy:53 devices advertising the Thingy environment service (Thingy:53 support is based on the shared Thingy UUID/parser implementation and still needs broader physical-hardware validation)
 - Connectable Bluetooth SIG Environmental Sensing devices that advertise service 0x181A and expose supported characteristics
 
 Current entities include:

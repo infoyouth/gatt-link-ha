@@ -284,7 +284,11 @@ def _device_schema(
     """Build the manual device-selection schema."""
     options: list[SelectOptionDict] = [
         SelectOptionDict(
-            label=info.name or info.address,
+            label=(
+                f"{info.name} ({info.address})"
+                if info.name and info.name != info.address
+                else info.address
+            ),
             value=info.address,
         )
         for info in devices

@@ -38,7 +38,7 @@
         "title": "Connection settings",
         "data": {
           "connection_mode": "Connection mode",
-          "scan_interval": "Polling interval (seconds)"
+          "scan_interval": "Polling interval (seconds, used only in Poll and disconnect mode)"
         }
       }
     },

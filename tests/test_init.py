@@ -652,7 +652,7 @@ async def test_push_setup_recovers_when_device_is_discovered(
     state = hass.states.get("sensor.thingy_temperature")
     assert state is not None
     assert state.state == "20.0"
-    assert "[BT-DIAG] HA discovery callback" in caplog.text
+    assert "HA discovery callback" in caplog.text
     register_callback.return_value.assert_called_once()
     assert await hass.config_entries.async_unload(entry.entry_id)
 
@@ -691,5 +691,5 @@ async def test_push_setup_retries_when_discovery_event_is_missed(
 
     assert entry.runtime_data.data is not None
     assert mock_gatt_link_client.clients[0].start_calls == 1
-    assert "[BT-DIAG] PUSH fallback retry fired" in caplog.text
+    assert "PUSH fallback retry fired" in caplog.text
     assert await hass.config_entries.async_unload(entry.entry_id)
