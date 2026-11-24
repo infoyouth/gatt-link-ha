@@ -2,6 +2,14 @@
 
 <!-- version list -->
 
+## v0.7.13 (2026-11-24)
+
+### Bug Fixes
+
+- **deps**: Update gatt-link-ble to 0.6.1
+  ([`0ce10de`](https://github.com/infoyouth/gatt-link-ha/commit/0ce10debf12c1f47adf3380e3db497605f416f5e))
+
+
 ## v0.7.12 (2026-11-23)
 
 ### Bug Fixes
