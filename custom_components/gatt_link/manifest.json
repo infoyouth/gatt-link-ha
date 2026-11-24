@@ -19,6 +19,6 @@
   "integration_type": "device",
   "iot_class": "local_push",
   "issue_tracker": "https://github.com/infoyouth/gatt-link-ha/issues",
-  "requirements": ["gatt-link-ble==0.6.0"],
+  "requirements": ["gatt-link-ble==0.6.1"],
   "version": "0.7.12"
 }
