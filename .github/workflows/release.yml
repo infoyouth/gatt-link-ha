@@ -19,7 +19,7 @@ jobs:
       github.event.pull_request.head.ref == 'release/version' &&
       github.event.pull_request.head.repo.full_name == github.repository
     name: Tag and publish GitHub release
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: write
     steps:
