@@ -193,10 +193,15 @@ async def test_shutdown_cancels_pending_push_start(
         client = mock_gatt_link_client.clients[0]
         await client.start_entered.wait()
 
+        assert client.active
+        assert mock_gatt_link_client.active_clients == (client,)
+        assert mock_gatt_link_client.outstanding_operations == 1
+
         await coordinator.async_shutdown()
 
         assert refresh_task.done()
         assert not client.active
+        assert client.start_cleanup_calls == 1
         assert mock_gatt_link_client.outstanding_operations == 0
         assert mock_gatt_link_client.active_clients == ()
     finally:
