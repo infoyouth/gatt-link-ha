@@ -1,5 +1,6 @@
 """Coordinate GATT Link BLE updates with Home Assistant."""
 
+import asyncio
 import logging
 from collections.abc import Callable
 from datetime import datetime, timedelta
@@ -85,8 +86,9 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             )
 
         self._client: GattLinkClient | None = None
-        self._last_ble_device: BLEDevice | None = None
+        self._push_start_task: asyncio.Task[None] | None = None
         self._push_started = False
+        self._shutdown = False
         self._unavailable_logged = False
         self._unsub_freshness_check: Callable[[], None] | None = None
         self._unsub_bluetooth_callback: Callable[[], None] | None = None
@@ -158,7 +160,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
     @callback
     def _async_check_data_freshness(self, _now: datetime) -> None:
         """Refresh entity availability when polled data becomes stale."""
-        if not self.data_is_fresh:
+        if not self._shutdown and not self.data_is_fresh:
             self.async_update_listeners()
 
     @override
@@ -214,8 +216,6 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                     translation_domain=DOMAIN,
                     translation_key="bluetooth_device_unavailable",
                 )
-            self._last_ble_device = ble_device
-
             client = GattLinkClient(
                 self._get_ble_device_for_reconnect,
                 mode=ConnectionMode.PUSH,
@@ -224,8 +224,14 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                 disconnect_callback=self._handle_disconnect,
             )
             _LOGGER.debug("Starting PUSH client for %s", self.device_name)
+            start_task = self._config_entry.async_create_task(
+                self.hass,
+                client.start(),
+                f"Start GATT Link client for {self.device_name}",
+            )
+            self._push_start_task = start_task
             try:
-                await client.start()
+                await start_task
             except GattLinkError as err:
                 _LOGGER.debug(
                     "PUSH client start failed for %s (%s)",
@@ -239,6 +245,9 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
                     translation_domain=DOMAIN,
                     translation_key="connection_failed",
                 ) from err
+            finally:
+                if self._push_start_task is start_task:
+                    self._push_start_task = None
             self._client = client
             self._push_started = True
             self._log_recovered()
@@ -255,6 +264,8 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
         _change: BluetoothChange,
     ) -> None:
         """Retry setup as soon as HA sees the configured connectable device."""
+        if self._shutdown:
+            return
         _LOGGER.debug(
             "HA discovery callback for %s (change=%s, connectable=%s, "
             "rssi=%s); requesting refresh",
@@ -267,9 +278,8 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             service_info.connectable
             and format_mac(service_info.address) == self.address
         ):
-            self._last_ble_device = service_info.device
             _LOGGER.debug(
-                "Cached BLEDevice from discovery callback for %s",
+                "Matched connectable BLEDevice from discovery callback for %s",
                 self.device_name,
             )
         else:
@@ -283,7 +293,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
     @callback
     def _async_retry_connection(self, _now: datetime) -> None:
         """Retry push startup periodically if a discovery event was missed."""
-        if self._client is None:
+        if not self._shutdown and self._client is None:
             _LOGGER.debug(
                 "PUSH fallback retry fired for %s; requesting refresh",
                 self.device_name,
@@ -310,22 +320,8 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             connectable=True,
         )
         connectable_lookup = ble_device is not None
-        all_history_lookup = False
-        cached_lookup = False
         discovered_lookup = False
         discovered_count = 0
-
-        if ble_device is None:
-            ble_device = bluetooth.async_ble_device_from_address(
-                self.hass,
-                self.address,
-                connectable=False,
-            )
-            all_history_lookup = ble_device is not None
-
-        if ble_device is None:
-            ble_device = self._last_ble_device
-            cached_lookup = ble_device is not None
 
         if ble_device is None:
             discovered_services = bluetooth.async_discovered_service_info(
@@ -337,17 +333,12 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
             for service_info in discovered_services:
                 if format_mac(service_info.address) == self.address:
                     ble_device = service_info.device
-                    self._last_ble_device = ble_device
                     discovered_lookup = True
                     break
 
         resolution_source = (
             "connectable lookup"
             if connectable_lookup
-            else "all-history lookup"
-            if all_history_lookup
-            else "discovery callback cache"
-            if cached_lookup
             else "discovered devices"
             if discovered_lookup
             else None
@@ -430,15 +421,13 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
 
     @callback
     def _get_ble_device_for_reconnect(self) -> BLEDevice:
-        """Refresh the cached BLE device when Home Assistant has a newer one."""
-        if (ble_device := self._get_live_ble_device()) is not None:
-            self._last_ble_device = ble_device
-        if self._last_ble_device is None:
+        """Resolve a currently connectable device for a GATT connection."""
+        if (ble_device := self._get_live_ble_device()) is None:
             raise UpdateFailed(
                 translation_domain=DOMAIN,
                 translation_key="bluetooth_device_unavailable",
             )
-        return self._last_ble_device
+        return ble_device
 
     @callback
     def _log_unavailable(self) -> None:
@@ -461,7 +450,7 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
     @callback
     def _handle_state_update(self, state: GattDeviceState) -> None:
         """Publish state updates after the initial connection has started."""
-        if self._push_started:
+        if self._push_started and not self._shutdown:
             self._log_recovered()
             async_delete_proxy_slots_issue(self.hass, self._config_entry)
             self.async_set_updated_data(state)
@@ -469,6 +458,8 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
     @callback
     def _handle_disconnect(self) -> None:
         """Mark push entities unavailable while the client reconnects."""
+        if self._shutdown:
+            return
         self._log_unavailable()
         self.async_set_update_error(
             UpdateFailed(
@@ -479,12 +470,25 @@ class GattLinkCoordinator(TimestampDataUpdateCoordinator[GattDeviceState]):
 
     async def async_shutdown(self) -> None:
         """Stop the BLE client and coordinator refresh tasks."""
+        self._shutdown = True
         try:
             self._stop_connection_recovery()
             if self._unsub_freshness_check is not None:
                 self._unsub_freshness_check()
+            if self._push_start_task is not None:
+                self._push_start_task.cancel()
+                await asyncio.gather(self._push_start_task, return_exceptions=True)
             if self._client is not None:
-                await self._client.stop()
+                stop_task = self._config_entry.async_create_task(
+                    self.hass,
+                    self._client.stop(),
+                    f"Stop GATT Link client for {self.device_name}",
+                )
+                try:
+                    await asyncio.shield(stop_task)
+                except asyncio.CancelledError:
+                    await stop_task
+                    raise
         finally:
             await super().async_shutdown()
 
