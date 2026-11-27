@@ -71,6 +71,7 @@ class FakeGattLinkClient:
         self.start_error: GattLinkError | None = None
         self.poll_error: GattLinkError | None = None
         self.start_calls = 0
+        self.start_cleanup_calls = 0
         self.poll_calls = 0
         self.stop_calls = 0
 
@@ -79,6 +80,8 @@ class FakeGattLinkClient:
         self.start_calls += 1
         self.start_entered.set()
         self.start_in_progress = True
+        self.active = True
+        succeeded = False
         try:
             if self.start_gate is not None:
                 await self.start_gate.wait()
@@ -87,7 +90,11 @@ class FakeGattLinkClient:
             self.active = True
             if self.state_callback is not None:
                 self.state_callback(self.state)
+            succeeded = True
         finally:
+            if not succeeded:
+                self.active = False
+                self.start_cleanup_calls += 1
             self.start_in_progress = False
 
     async def poll(self) -> GattDeviceState:
