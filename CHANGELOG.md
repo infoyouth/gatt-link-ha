@@ -2,6 +2,22 @@
 
 <!-- version list -->
 
+## v0.7.14 (2026-11-27)
+
+### Bug Fixes
+
+- **ci**: Preserve Python 3.14 support
+  ([`7488536`](https://github.com/infoyouth/gatt-link-ha/commit/7488536f9aa179963b6689fddf477c629b5c2bbd))
+
+### Chores
+
+- **deps**: Update non-major github actions
+  ([`9b8200b`](https://github.com/infoyouth/gatt-link-ha/commit/9b8200bd56430d349963c4b0f61dd407b16b25d0))
+
+- **deps**: Update python to >=3.15.2,<3.16
+  ([`0e197ff`](https://github.com/infoyouth/gatt-link-ha/commit/0e197ffbb3732dabcf931b7b374525c0447f65c8))
+
+
 ## v0.7.13 (2026-11-24)
 
 ### Bug Fixes
