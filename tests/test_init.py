@@ -1,5 +1,6 @@
 """Tests for GATT Link config-entry setup and teardown."""
 
+import asyncio
 import logging
 import time
 from datetime import timedelta
@@ -18,7 +19,7 @@ from custom_components.gatt_link.const import (
 )
 from custom_components.gatt_link.coordinator import GattLinkCoordinator
 from gatt_link_ble import ConnectionMode
-from gatt_link_ble.exceptions import GattConnectionError
+from gatt_link_ble.exceptions import GattConnectionError, GattTimeoutError
 from habluetooth import BaseHaScanner
 from homeassistant.components import bluetooth
 from homeassistant.const import STATE_UNAVAILABLE
@@ -126,6 +127,116 @@ async def test_push_setup_starts_client_and_unload_stops_it(
     assert mock_gatt_link_client.clients[0].start_calls == 1
 
     assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_repeated_shutdown_leaves_no_active_client(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+) -> None:
+    """Repeated coordinator shutdown remains safe and leaves no client active."""
+    entry = _config_entry(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    coordinator = entry.runtime_data
+    client = mock_gatt_link_client.clients[0]
+
+    await coordinator.async_shutdown()
+    await coordinator.async_shutdown()
+
+    assert not client.active
+    assert mock_gatt_link_client.active_clients == ()
+    assert mock_gatt_link_client.outstanding_operations == 0
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_shutdown_cancellation_drains_client_stop(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+) -> None:
+    """Cancelling shutdown does not abandon an in-flight client disconnect."""
+    entry = _config_entry(hass)
+    assert await hass.config_entries.async_setup(entry.entry_id)
+    coordinator = entry.runtime_data
+    client = mock_gatt_link_client.clients[0]
+    client.stop_gate = asyncio.Event()
+    shutdown_task = hass.async_create_task(coordinator.async_shutdown())
+
+    try:
+        await client.stop_entered.wait()
+        shutdown_task.cancel()
+        client.stop_gate.set()
+        await asyncio.gather(shutdown_task, return_exceptions=True)
+
+        assert shutdown_task.cancelled()
+        assert not client.active
+        assert mock_gatt_link_client.outstanding_operations == 0
+    finally:
+        client.stop_gate.set()
+        await asyncio.gather(shutdown_task, return_exceptions=True)
+        await coordinator.async_shutdown()
+    assert await hass.config_entries.async_unload(entry.entry_id)
+
+
+@pytest.mark.asyncio
+async def test_shutdown_cancels_pending_push_start(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+) -> None:
+    """Shutdown cancels an in-flight initial start without leaking the client."""
+    mock_gatt_link_client.start_gate = asyncio.Event()
+    coordinator = GattLinkCoordinator(hass, _config_entry(hass))
+    refresh_task = hass.async_create_task(coordinator.async_refresh())
+
+    try:
+        await mock_gatt_link_client.client_created.wait()
+        client = mock_gatt_link_client.clients[0]
+        await client.start_entered.wait()
+
+        await coordinator.async_shutdown()
+
+        assert refresh_task.done()
+        assert not client.active
+        assert mock_gatt_link_client.outstanding_operations == 0
+        assert mock_gatt_link_client.active_clients == ()
+    finally:
+        if mock_gatt_link_client.start_gate is not None:
+            mock_gatt_link_client.start_gate.set()
+        await asyncio.gather(refresh_task, return_exceptions=True)
+        await coordinator.async_shutdown()
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_poll_cleans_up_operation(
+    hass: HomeAssistant,
+    mock_gatt_link_client: FakeGattLinkClientFactory,
+) -> None:
+    """Cancelling setup during a poll leaves no client operation running."""
+    mock_gatt_link_client.poll_gate = asyncio.Event()
+    entry = _config_entry(
+        hass,
+        {
+            CONF_CONNECTION_MODE: CONNECTION_MODE_POLL_AND_DISCONNECT,
+            CONF_SCAN_INTERVAL: 37,
+        },
+    )
+    setup_task = hass.async_create_task(hass.config_entries.async_setup(entry.entry_id))
+
+    try:
+        await mock_gatt_link_client.client_created.wait()
+        client = mock_gatt_link_client.clients[0]
+        await client.poll_entered.wait()
+
+        setup_task.cancel()
+        await asyncio.gather(setup_task, return_exceptions=True)
+
+        assert not client.poll_in_progress
+        assert mock_gatt_link_client.outstanding_operations == 0
+        assert mock_gatt_link_client.active_clients == ()
+    finally:
+        if mock_gatt_link_client.poll_gate is not None:
+            mock_gatt_link_client.poll_gate.set()
+        await asyncio.gather(setup_task, return_exceptions=True)
 
 
 @pytest.mark.asyncio
@@ -394,12 +505,12 @@ async def test_push_mode_logs_reachability_diagnostics_when_device_is_missing(
 
 
 @pytest.mark.asyncio
-async def test_push_mode_falls_back_to_all_device_history(
+async def test_push_mode_rejects_nonconnectable_only_history(
     hass: HomeAssistant,
     mock_gatt_link_client: FakeGattLinkClientFactory,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Push starts when HA exposes the BLE device only in all-history lookup."""
+    """Push waits for connectable discovery when only all-history has the device."""
     live_lookup = Mock(
         side_effect=lambda _hass, _address, connectable=True: (
             None if connectable else BLEDevice("AA:BB:CC:DD:EE:FF", "Thingy", {})
@@ -414,14 +525,9 @@ async def test_push_mode_falls_back_to_all_device_history(
 
     assert await hass.config_entries.async_setup(entry.entry_id)
 
-    assert live_lookup.call_count >= 2
-    assert any(
-        call.kwargs["connectable"] is True for call in live_lookup.call_args_list
-    )
-    assert any(
-        call.kwargs["connectable"] is False for call in live_lookup.call_args_list
-    )
-    assert mock_gatt_link_client.clients[0].start_calls == 1
+    assert entry.runtime_data.data is None
+    assert mock_gatt_link_client.clients == []
+    live_lookup.assert_called_once_with(hass, "aa:bb:cc:dd:ee:ff", connectable=True)
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -567,6 +673,49 @@ def test_reconnect_provider_requires_a_previously_seen_ble_device(
     assert error.value.translation_key == "bluetooth_device_unavailable"
 
 
+def test_reconnect_provider_requires_fresh_connectable_device(
+    hass: HomeAssistant,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reconnect waits for connectable discovery instead of using stale history."""
+    stale_device = BLEDevice("AA:BB:CC:DD:EE:FF", "Stale Thingy", {})
+    discovered_device: BLEDevice | None = None
+    lookups: list[bool] = []
+
+    def get_ble_device(
+        _hass: HomeAssistant,
+        _address: str,
+        connectable: bool = True,
+    ) -> BLEDevice | None:
+        lookups.append(connectable)
+        return discovered_device if connectable else stale_device
+
+    monkeypatch.setattr(bluetooth, "async_ble_device_from_address", get_ble_device)
+    monkeypatch.setattr(
+        bluetooth,
+        "async_discovered_service_info",
+        lambda *_args, **_kwargs: [],
+    )
+    coordinator = GattLinkCoordinator(
+        hass,
+        MockConfigEntry(
+            domain=DOMAIN,
+            title="Thingy",
+            unique_id="aa:bb:cc:dd:ee:ff",
+            data={"address": "AA:BB:CC:DD:EE:FF"},
+        ),
+    )
+    with pytest.raises(UpdateFailed) as error:
+        coordinator._get_ble_device_for_reconnect()
+
+    assert error.value.translation_key == "bluetooth_device_unavailable"
+    assert lookups == [True]
+
+    discovered_device = BLEDevice("AA:BB:CC:DD:EE:FF", "Fresh Thingy", {})
+    assert coordinator._get_ble_device_for_reconnect() is discovered_device
+    assert lookups == [True, True]
+
+
 @pytest.mark.asyncio
 async def test_options_update_reloads_client(
     hass: HomeAssistant,
@@ -593,18 +742,31 @@ async def test_options_update_reloads_client(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "error",
+    [
+        GattConnectionError("connection failed"),
+        GattTimeoutError("connection timed out"),
+    ],
+    ids=["connection-error", "timeout"],
+)
 async def test_push_connection_error_keeps_setup_loaded_for_retry(
     hass: HomeAssistant,
     mock_gatt_link_client: FakeGattLinkClientFactory,
+    error: GattConnectionError,
 ) -> None:
     """Connection errors prevent the config entry from completing setup."""
     entry = _config_entry(hass)
-    mock_gatt_link_client.start_error = GattConnectionError("connection failed")
+    mock_gatt_link_client.start_error = error
 
     assert await hass.config_entries.async_setup(entry.entry_id)
 
     assert mock_gatt_link_client.clients[0].start_calls == 1
     assert entry.runtime_data.data is None
+    assert isinstance(entry.runtime_data.last_exception, UpdateFailed)
+    assert entry.runtime_data.last_exception.translation_key == "connection_failed"
+    assert mock_gatt_link_client.outstanding_operations == 0
+    assert mock_gatt_link_client.active_clients == ()
     assert await hass.config_entries.async_unload(entry.entry_id)
 
 
@@ -636,6 +798,7 @@ async def test_push_setup_recovers_when_device_is_discovered(
     }
     assert register_callback.call_args.args[3] is bluetooth.BluetoothScanningMode.ACTIVE
 
+    device_available = True
     register_callback.call_args.args[1](
         SimpleNamespace(
             address="AA:BB:CC:DD:EE:FF",
